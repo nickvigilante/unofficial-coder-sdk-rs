@@ -124,18 +124,32 @@ pub fn discover_with(env: &dyn SessionEnv) -> Result<Session> {
     let not_logged_in =
         || Error::NotLoggedIn("no Coder session found; run `coder login` first".into());
     let config_dir = env.config_dir();
-    let url_text = env
-        .var("CODER_URL")
-        .or_else(|| {
-            config_dir
-                .as_ref()
-                .and_then(|d| env.read_file(&d.join("url")))
-        })
+    let config_url_text = config_dir
+        .as_ref()
+        .and_then(|d| env.read_file(&d.join("url")));
+    let env_url_text = env.var("CODER_URL");
+    let url_came_from_config_file = env_url_text.is_none();
+    let url_text = env_url_text
+        .or_else(|| config_url_text.clone())
         .ok_or_else(not_logged_in)?;
     let trimmed_url_text = url_text.trim();
     let url: Url = trimmed_url_text
         .parse()
         .map_err(|_| Error::NotLoggedIn(format!("invalid Coder URL {:?}", trimmed_url_text)))?;
+
+    // The session file on disk belongs to whatever host `config_dir/url` names. It is only
+    // safe to read when the URL we resolved above is that same file, or when CODER_URL names
+    // the same host, otherwise we would send config_dir/url's host's token to a different host.
+    let session_file_matches_url = url_came_from_config_file
+        || config_url_text.as_deref().is_some_and(|config_text| {
+            let config_trimmed = config_text.trim();
+            let Ok(config_url): std::result::Result<Url, _> = config_trimmed.parse() else {
+                return false;
+            };
+            host_key_from_text(trimmed_url_text, &url)
+                == host_key_from_text(config_trimmed, &config_url)
+        });
+
     let token = env
         .var("CODER_SESSION_TOKEN")
         .or_else(|| {
@@ -145,6 +159,9 @@ pub fn discover_with(env: &dyn SessionEnv) -> Result<Session> {
             })
         })
         .or_else(|| {
+            if !session_file_matches_url {
+                return None;
+            }
             config_dir
                 .as_ref()
                 .and_then(|d| env.read_file(&d.join("session")))
@@ -311,6 +328,34 @@ mod tests {
         assert_eq!(
             discover_with(&env).unwrap().token.expose_secret(),
             "test-token-userinfo"
+        );
+    }
+
+    #[test]
+    fn coder_url_for_different_host_than_config_ignores_session_file() {
+        let mut env = FakeEnv::default();
+        env.vars
+            .insert("CODER_URL".into(), "https://b.example.com".into());
+        env.files
+            .insert("/cfg/url".into(), "https://a.example.com".into());
+        env.files
+            .insert("/cfg/session".into(), "test-token-file".into());
+        let err = discover_with(&env).unwrap_err();
+        assert!(err.to_string().contains("coder login"), "{err}");
+    }
+
+    #[test]
+    fn coder_url_matching_config_host_uses_session_file() {
+        let mut env = FakeEnv::default();
+        env.vars
+            .insert("CODER_URL".into(), "https://Dev.Coder.com/".into());
+        env.files
+            .insert("/cfg/url".into(), "https://dev.coder.com".into());
+        env.files
+            .insert("/cfg/session".into(), "test-token-file".into());
+        assert_eq!(
+            discover_with(&env).unwrap().token.expose_secret(),
+            "test-token-file"
         );
     }
 
