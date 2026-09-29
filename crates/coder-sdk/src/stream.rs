@@ -45,7 +45,7 @@ impl Client {
             .join(path_and_query)
             .map_err(|e| Error::Transport(e.to_string()))?;
         let response = self
-            .http()
+            .ws_http()
             .get(url)
             .upgrade()
             .send()
@@ -65,7 +65,16 @@ impl Client {
     }
 
     /// Streams a chat's events. Frames are JSON arrays; each element is yielded separately.
-    /// An abnormal close yields one `Error::StreamClosed` and then the stream ends.
+    ///
+    /// The stream ending, for any reason, means the subscription is gone: the server sends a
+    /// normal (code 1000) close on its own teardown (for example, on redeploy) just as readily
+    /// as on a deliberate unsubscribe, so the stream ending is not itself a signal that the
+    /// caller asked for it to end. The caller must reconnect by calling `stream_chat` again,
+    /// passing the highest durable message id it has seen as `after_id` so the server can replay
+    /// anything missed. An `Error::Decode` item is not terminal; the stream keeps going after
+    /// it. An `Error::StreamClosed` item, when the stream yields one, is always the last item.
+    /// Callers must poll the stream continuously (not pause between items) so the server's pings
+    /// are answered; the server closes with code 1001 after about 30 seconds without a pong.
     pub async fn stream_chat(
         &self,
         chat: uuid::Uuid,
@@ -89,6 +98,16 @@ impl Client {
     }
 
     /// Streams chat list changes for the signed-in user, one event per frame.
+    ///
+    /// The stream ending, for any reason, means the subscription is gone: the server sends a
+    /// normal (code 1000) close on its own teardown (for example, on redeploy) just as readily
+    /// as on a deliberate unsubscribe, so the stream ending is not itself a signal that the
+    /// caller asked for it to end. The caller must reconnect by calling `watch_chats` again;
+    /// there is no cursor to resume from, so any events during the gap are missed. An
+    /// `Error::Decode` item is not terminal; the stream keeps going after it. An
+    /// `Error::StreamClosed` item, when the stream yields one, is always the last item. Callers
+    /// must poll the stream continuously (not pause between items) so the server's pings are
+    /// answered; the server closes with code 1001 after about 30 seconds without a pong.
     pub async fn watch_chats(&self) -> Result<impl Stream<Item = Result<WatchEvent>> + use<>> {
         let socket = self.open("/api/v2/chats/watch").await?;
         Ok(frames(socket).map(|frame| {
@@ -101,6 +120,11 @@ impl Client {
 }
 
 /// Text frames until a normal close. Anything else ends with one `StreamClosed` error.
+///
+/// A normal (code 1000) close ends the stream with no error item at all: the server sends this
+/// both when a caller-driven teardown happens and when the server tears the subscription down
+/// on its own, so this alone never implies the subscription is still meaningful to reconnect
+/// against without also passing along whatever cursor the caller already tracks.
 fn frames(socket: reqwest_websocket::WebSocket) -> impl Stream<Item = Result<String>> + use<> {
     stream::unfold(Some(socket), |state| async move {
         let mut socket = state?;
