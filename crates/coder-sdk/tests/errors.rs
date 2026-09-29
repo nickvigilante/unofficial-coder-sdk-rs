@@ -76,6 +76,39 @@ async fn generated_call_errors_keep_server_message_and_validations() {
     }
 }
 
+#[tokio::test]
+async fn cross_origin_redirect_is_not_followed() {
+    let other_origin = MockServer::start().await;
+    // If the redirect were followed, this would 200 and hand back the token-bearing request;
+    // the assertion on `received_requests` below is what pins that it never happens.
+    Mock::given(path("/api/v2/buildinfo"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({"version": "v0.0.0"})),
+        )
+        .mount(&other_origin)
+        .await;
+
+    let server = MockServer::start().await;
+    Mock::given(path("/api/v2/buildinfo"))
+        .respond_with(ResponseTemplate::new(302).insert_header(
+            "Location",
+            format!("{}/api/v2/buildinfo", other_origin.uri()),
+        ))
+        .mount(&server)
+        .await;
+
+    let result = client(&server).await.server_version().await;
+    assert!(
+        matches!(result, Err(Error::Api { status: 302, .. })),
+        "{result:?}"
+    );
+    assert_eq!(
+        other_origin.received_requests().await.unwrap().len(),
+        0,
+        "the session token must never reach the redirect target"
+    );
+}
+
 #[test]
 fn token_never_appears_in_debug_output() {
     let session = Session {

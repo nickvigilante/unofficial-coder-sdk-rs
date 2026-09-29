@@ -1,8 +1,38 @@
 use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::redirect::{Action, Attempt, Policy};
 use secrecy::{ExposeSecret, SecretString};
 use url::Url;
 
 use crate::{Error, Result};
+
+/// True when `a` and `b` share a scheme, host, and (explicit or default) port.
+fn same_origin(a: &Url, b: &Url) -> bool {
+    a.scheme() == b.scheme()
+        && a.host() == b.host()
+        && a.port_or_known_default() == b.port_or_known_default()
+}
+
+/// Stops any redirect that crosses origins, so the `Coder-Session-Token` header reqwest
+/// forwards on redirects never reaches a host other than the one the caller asked for.
+/// Same-origin redirects still follow, up to reqwest's usual 10-hop default.
+fn same_origin_redirect_policy(attempt: Attempt) -> Action {
+    if attempt.previous().len() > 10 {
+        return attempt.error("too many redirects");
+    }
+    match attempt.previous().first() {
+        Some(original) if !same_origin(original, attempt.url()) => attempt.stop(),
+        _ => attempt.follow(),
+    }
+}
+
+/// The `ClientBuilder` settings shared by every `reqwest::Client` this SDK builds.
+fn base_builder(headers: HeaderMap) -> reqwest::ClientBuilder {
+    let user_agent = concat!("unofficial-coder-sdk-rs/", env!("CARGO_PKG_VERSION"));
+    reqwest::Client::builder()
+        .default_headers(headers)
+        .user_agent(user_agent)
+        .redirect(Policy::custom(same_origin_redirect_policy))
+}
 
 /// A Coder deployment URL and the session token used to call it.
 #[derive(Debug, Clone)]
@@ -33,16 +63,8 @@ impl Client {
         token.set_sensitive(true);
         let mut headers = HeaderMap::new();
         headers.insert("Coder-Session-Token", token);
-        let user_agent = concat!("unofficial-coder-sdk-rs/", env!("CARGO_PKG_VERSION"));
-        let http = reqwest::Client::builder()
-            .default_headers(headers.clone())
-            .user_agent(user_agent)
-            .build()?;
-        let ws_http = reqwest::Client::builder()
-            .default_headers(headers)
-            .user_agent(user_agent)
-            .http1_only()
-            .build()?;
+        let http = base_builder(headers.clone()).build()?;
+        let ws_http = base_builder(headers).http1_only().build()?;
         let base = session.url.clone();
         let api = coder_api_gen::Client::new_with_client(
             base.as_str().trim_end_matches('/'),
