@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: coder/coder tag, branch, or commit
+        description: coder/coder tag, branch, or full commit SHA (short SHAs cannot be fetched)
         required: true
   schedule:
     - cron: "17 6 * * *"
@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: rustup show
+      - run: rustup toolchain install
       - name: Pick the ref
         id: ref
         env:
@@ -52,6 +52,8 @@ jobs:
           cut -f1 spec/patches.log | sort | uniq -c > /tmp/rules-before.txt
           scripts/regenerate.sh "$REF"
           cut -f1 spec/patches.log | sort | uniq -c > /tmp/rules-after.txt
+          cargo fmt --all --check
+          cargo clippy --workspace --exclude coder-api-gen --all-targets -- -D warnings
           cargo test --workspace
           scripts/smoke.sh
       - name: Open a pull request
@@ -66,16 +68,7 @@ jobs:
           fi
           branch="regenerate-$(printf '%s' "$REF" | tr -c 'A-Za-z0-9' '-' | tr -s '-')"
           git check-ref-format --branch "$branch" >/dev/null || { echo "cannot derive a valid branch name from $REF"; exit 1; }
-          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
-            echo "Branch $branch already exists; a regeneration PR is likely open"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch -c "$branch"
-          git add -A
-          git commit -m "feat: regenerate coder-api-gen from coder/coder $REF" -m "Assisted-by: AI"
-          git push -u origin "$branch"
+          title="feat: regenerate coder-api-gen from coder/coder $REF"
           {
             echo "## Summary"
             echo
@@ -99,4 +92,20 @@ jobs:
             echo "---"
             echo "🤖 Built with AI assistance."
           } > /tmp/body.md
-          gh pr create --title "feat: regenerate coder-api-gen from coder/coder $REF" --body-file /tmp/body.md
+          open_count="$(gh pr list --head "$branch" --state open --json number --jq length)"
+          if [ "$open_count" -ne 0 ]; then
+            echo "A pull request for $branch is already open"
+            exit 0
+          fi
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            echo "Branch $branch already exists without an open PR; retrying PR creation"
+            gh pr create --head "$branch" --title "$title" --body-file /tmp/body.md
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add -A
+          git commit -m "$title" -m "Assisted-by: AI"
+          git push -u origin "$branch"
+          gh pr create --head "$branch" --title "$title" --body-file /tmp/body.md
