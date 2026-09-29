@@ -73,7 +73,28 @@ struct Credential {
     api_token: String,
 }
 
-fn normalized_host(url: &Url) -> Option<String> {
+/// Extracts the host key from raw URL text: authority after "://" up to first "/", "?", or "#",
+/// with "userinfo@" prefix removed, lowercase, and trimmed.
+/// Falls back to parsed Url's host[:port] if no "://" found.
+fn host_key_from_text(raw_text: &str, url: &Url) -> Option<String> {
+    if let Some(scheme_end) = raw_text.find("://") {
+        let after_scheme = &raw_text[scheme_end + 3..];
+        let authority_end = after_scheme
+            .find(['/', '?', '#'])
+            .unwrap_or(after_scheme.len());
+        let authority = &after_scheme[..authority_end];
+
+        // Remove userinfo@ prefix (everything up to and including the last @)
+        let host_part = if let Some(at_pos) = authority.rfind('@') {
+            &authority[at_pos + 1..]
+        } else {
+            authority
+        };
+
+        return Some(host_part.trim().to_lowercase());
+    }
+
+    // Fallback to parsed Url's host[:port]
     let host = url.host_str()?.to_lowercase();
     Some(match url.port() {
         Some(port) => format!("{host}:{port}"),
@@ -81,16 +102,21 @@ fn normalized_host(url: &Url) -> Option<String> {
     })
 }
 
-/// Extracts the token for `url` from the `coder` CLI's keychain value.
-pub fn token_from_keychain(blob_b64: &str, url: &Url) -> Option<String> {
+/// Extracts the token for a specific host key from the `coder` CLI's keychain value.
+pub fn token_from_keychain_for_host(blob_b64: &str, host_key: &str) -> Option<String> {
     let json = base64::engine::general_purpose::STANDARD
         .decode(blob_b64.trim())
         .ok()?;
     let creds: HashMap<String, Credential> = serde_json::from_slice(&json).ok()?;
     creds
-        .get(&normalized_host(url)?)
+        .get(host_key)
         .map(|c| c.api_token.clone())
         .filter(|t| !t.is_empty())
+}
+
+/// Extracts the token for `url` from the `coder` CLI's keychain value.
+pub fn token_from_keychain(blob_b64: &str, url: &Url) -> Option<String> {
+    token_from_keychain_for_host(blob_b64, &host_key_from_text(url.as_str(), url)?)
 }
 
 /// Discovery against an injectable environment.
@@ -106,15 +132,17 @@ pub fn discover_with(env: &dyn SessionEnv) -> Result<Session> {
                 .and_then(|d| env.read_file(&d.join("url")))
         })
         .ok_or_else(not_logged_in)?;
-    let url: Url = url_text
-        .trim()
+    let trimmed_url_text = url_text.trim();
+    let url: Url = trimmed_url_text
         .parse()
-        .map_err(|_| Error::NotLoggedIn(format!("invalid Coder URL {:?}", url_text.trim())))?;
+        .map_err(|_| Error::NotLoggedIn(format!("invalid Coder URL {:?}", trimmed_url_text)))?;
     let token = env
         .var("CODER_SESSION_TOKEN")
         .or_else(|| {
-            env.keychain()
-                .and_then(|blob| token_from_keychain(&blob, &url))
+            env.keychain().and_then(|blob| {
+                let key = host_key_from_text(trimmed_url_text, &url)?;
+                token_from_keychain_for_host(&blob, &key)
+            })
         })
         .or_else(|| {
             config_dir
@@ -243,6 +271,47 @@ mod tests {
     fn malformed_keychain_blob_is_ignored() {
         let url: url::Url = "https://dev.coder.com".parse().unwrap();
         assert_eq!(token_from_keychain("not base64!!", &url), None);
+    }
+
+    #[test]
+    fn keychain_with_explicit_default_port() {
+        let mut env = FakeEnv::default();
+        env.files
+            .insert("/cfg/url".into(), "https://dev.coder.com:443/".into());
+        env.keychain = Some(keychain_blob(
+            "dev.coder.com:443",
+            "test-token-explicit-port",
+        ));
+        assert_eq!(
+            discover_with(&env).unwrap().token.expose_secret(),
+            "test-token-explicit-port"
+        );
+    }
+
+    #[test]
+    fn keychain_without_explicit_default_port() {
+        let mut env = FakeEnv::default();
+        env.files
+            .insert("/cfg/url".into(), "https://dev.coder.com".into());
+        env.keychain = Some(keychain_blob("dev.coder.com", "test-token-implicit-port"));
+        assert_eq!(
+            discover_with(&env).unwrap().token.expose_secret(),
+            "test-token-implicit-port"
+        );
+    }
+
+    #[test]
+    fn extracts_host_key_from_url_with_userinfo_and_path() {
+        let mut env = FakeEnv::default();
+        env.files.insert(
+            "/cfg/url".into(),
+            "https://user@Dev.Coder.com:8443/path?q=1".into(),
+        );
+        env.keychain = Some(keychain_blob("dev.coder.com:8443", "test-token-userinfo"));
+        assert_eq!(
+            discover_with(&env).unwrap().token.expose_secret(),
+            "test-token-userinfo"
+        );
     }
 
     #[test]
