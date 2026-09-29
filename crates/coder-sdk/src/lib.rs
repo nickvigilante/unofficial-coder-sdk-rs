@@ -11,7 +11,7 @@ pub use coder_api_gen::types;
 pub use enums::{ChatStatus, PartType, StreamEventType};
 pub use error::{Error, Result, Validation};
 pub use session::discover_session;
-pub use stream::{StreamEvent, WatchEvent};
+pub use stream::{STREAM_IDLE_TIMEOUT, StreamEvent, WatchEvent};
 
 /// The coder/coder ref and commit this SDK was generated from, as written by `scripts/regenerate.sh`.
 pub const GENERATED_FROM: &str = include_str!("../../../spec/coder-ref.txt");

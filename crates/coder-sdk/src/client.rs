@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::redirect::{Action, Attempt, Policy};
 use secrecy::{ExposeSecret, SecretString};
@@ -24,6 +26,13 @@ fn same_origin_redirect_policy(attempt: Attempt) -> Action {
         _ => attempt.follow(),
     }
 }
+
+/// How long any connection attempt, HTTP or WebSocket, may take.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How long a non-stream HTTP request may take end to end. WebSocket streams get no request
+/// timeout, because a healthy stream stays open indefinitely.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// The `ClientBuilder` settings shared by every `reqwest::Client` this SDK builds.
 fn base_builder(headers: HeaderMap) -> reqwest::ClientBuilder {
@@ -58,13 +67,28 @@ pub struct Client {
 impl Client {
     /// Builds a client that sends the session token on every request, including WebSocket upgrades.
     pub fn new(session: &Session) -> Result<Client> {
+        Self::with_timeouts(session, CONNECT_TIMEOUT, REQUEST_TIMEOUT)
+    }
+
+    /// `new` with caller-chosen timeouts, so tests need not wait a full minute.
+    pub(crate) fn with_timeouts(
+        session: &Session,
+        connect: Duration,
+        request: Duration,
+    ) -> Result<Client> {
         let mut token = HeaderValue::from_str(session.token.expose_secret())
             .map_err(|_| Error::InvalidToken)?;
         token.set_sensitive(true);
         let mut headers = HeaderMap::new();
         headers.insert("Coder-Session-Token", token);
-        let http = base_builder(headers.clone()).build()?;
-        let ws_http = base_builder(headers).http1_only().build()?;
+        let http = base_builder(headers.clone())
+            .connect_timeout(connect)
+            .timeout(request)
+            .build()?;
+        let ws_http = base_builder(headers)
+            .http1_only()
+            .connect_timeout(connect)
+            .build()?;
         let base = session.url.clone();
         let api = coder_api_gen::Client::new_with_client(
             base.as_str().trim_end_matches('/'),
@@ -116,5 +140,85 @@ impl Client {
             .as_str()
             .map(str::to_owned)
             .ok_or_else(|| Error::Decode("buildinfo has no version".into()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use futures::{SinkExt, StreamExt};
+    use secrecy::SecretString;
+    use tokio::net::TcpListener;
+    use tokio_tungstenite::tungstenite::Message;
+    use tokio_tungstenite::tungstenite::protocol::CloseFrame;
+    use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+
+    use super::{Client, Session};
+    use crate::Error;
+
+    fn client(addr: std::net::SocketAddr, request: Duration) -> Client {
+        Client::with_timeouts(
+            &Session {
+                url: format!("http://{addr}").parse().unwrap(),
+                token: SecretString::from("test-token-not-real"),
+            },
+            Duration::from_secs(5),
+            request,
+        )
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_hung_request_fails_after_the_request_timeout() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (hold_tx, hold_rx) = tokio::sync::oneshot::channel::<()>();
+        tokio::spawn(async move {
+            // Accept the connection and never answer.
+            let (_tcp, _) = listener.accept().await.unwrap();
+            let _ = hold_rx.await;
+        });
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            client(addr, Duration::from_millis(300)).server_version(),
+        )
+        .await
+        .expect("the request timeout must fire before the test ceiling");
+        drop(hold_tx);
+        assert!(matches!(result, Err(Error::Transport(_))), "{result:?}");
+    }
+
+    #[tokio::test]
+    async fn a_stream_outlives_the_request_timeout() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut ws = tokio_tungstenite::accept_async(tcp).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(800)).await;
+            ws.send(Message::text(r#"[{"type":"preview_reset"}]"#))
+                .await
+                .unwrap();
+            ws.close(Some(CloseFrame {
+                code: CloseCode::Normal,
+                reason: "".into(),
+            }))
+            .await
+            .unwrap();
+            while ws.next().await.is_some() {}
+        });
+        let events: Vec<_> = tokio::time::timeout(
+            Duration::from_secs(10),
+            client(addr, Duration::from_millis(200))
+                .stream_chat(uuid::Uuid::new_v4(), None)
+                .await
+                .unwrap()
+                .collect(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(events.len(), 1, "{events:?}");
+        assert!(events[0].is_ok());
     }
 }
