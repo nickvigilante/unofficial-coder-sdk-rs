@@ -8,6 +8,9 @@ on:
   schedule:
     - cron: "17 6 * * *"
 permissions: {}
+concurrency:
+  group: regenerate
+  cancel-in-progress: false
 jobs:
   regenerate:
     runs-on: ubuntu-latest
@@ -61,7 +64,12 @@ jobs:
             echo "No changes"
             exit 0
           fi
-          branch="regenerate-$(echo "$REF" | tr '/.' '--')"
+          branch="regenerate-$(printf '%s' "$REF" | tr -c 'A-Za-z0-9' '-' | tr -s '-')"
+          git check-ref-format --branch "$branch" >/dev/null || { echo "cannot derive a valid branch name from $REF"; exit 1; }
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            echo "Branch $branch already exists; a regeneration PR is likely open"
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$branch"
