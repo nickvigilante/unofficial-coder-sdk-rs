@@ -22,7 +22,7 @@ type field struct {
 	Kind       string `json:"kind"`
 }
 
-var skipDirs = map[string]bool{"node_modules": true, "vendor": true, "site": true, ".git": true}
+var skipDirs = map[string]bool{"node_modules": true, "vendor": true, "site": true}
 
 func main() {
 	if len(os.Args) != 2 {
@@ -50,7 +50,11 @@ func scan(root string) ([]field, error) {
 			return err
 		}
 		if d.IsDir() {
+			// Skip explicit dirs and any dot-prefixed dir except at root
 			if skipDirs[d.Name()] {
+				return filepath.SkipDir
+			}
+			if strings.HasPrefix(d.Name(), ".") && path != root {
 				return filepath.SkipDir
 			}
 			return nil
@@ -74,7 +78,17 @@ func scan(root string) ([]field, error) {
 		}
 		return fields[i].Property < fields[j].Property
 	})
-	return fields, nil
+	// Deduplicate identical entries
+	seen := make(map[[3]string]bool)
+	unique := []field{}
+	for _, f := range fields {
+		key := [3]string{f.Definition, f.Property, f.Kind}
+		if !seen[key] {
+			seen[key] = true
+			unique = append(unique, f)
+		}
+	}
+	return unique, nil
 }
 
 func fileFields(file *ast.File) []field {
