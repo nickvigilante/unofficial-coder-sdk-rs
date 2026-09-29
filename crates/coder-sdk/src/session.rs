@@ -102,32 +102,61 @@ fn host_key_from_text(raw_text: &str, url: &Url) -> Option<String> {
     })
 }
 
-/// True when the raw-text host key and the parsed URL name the same host and port.
-/// The raw key matches the `coder` CLI's storage; the parsed URL is where requests really go.
-/// A `url` crate quirk treats `\` as `/` in special schemes like `https`, so
-/// `https://evil.example\@dev.coder.com` parses to host `evil.example` even though its raw
-/// text reads as `dev.coder.com` up to the last `@`. This catches that divergence.
-fn host_keys_agree(raw_text: &str, url: &Url) -> bool {
-    let Some(raw_key) = host_key_from_text(raw_text, url) else {
-        return false;
-    };
+/// Core of `host_keys_agree`, taking an already-extracted raw host key. Split out so callers
+/// that also need that key for a keychain lookup (`discover_with`) compute it exactly once and
+/// pass the same value here and to the lookup: the checked key and the used key cannot drift.
+///
+/// Invariant: a raw key with no explicit port means the scheme's default port, never whatever
+/// port the parsed URL happens to carry. The URL's own port cannot be used as the fallback,
+/// because it can itself be steered by the same backslash-as-slash quirk this check guards
+/// against: `https://dev.coder.com:8443\@dev.coder.com` parses to host `dev.coder.com` port
+/// `8443`, but its raw key (read up to the last `@`) is just `dev.coder.com` with no port.
+/// Comparing that port-less key against the URL's own port (8443) would trivially agree,
+/// letting a token stored for `dev.coder.com`'s default port leak to port 8443 instead.
+fn host_key_agrees_with_url(raw_key: &str, url: &Url) -> bool {
     let Some(host) = url.host_str() else {
         return false;
     };
     let Some(port) = url.port_or_known_default() else {
         return false;
     };
+    let scheme_default_port = || {
+        let mut default_port_url = url.clone();
+        let _ = default_port_url.set_port(None);
+        default_port_url.port_or_known_default()
+    };
     // A bracketed IPv6 raw key (e.g. "[::1]:3000") has an internal colon on either side of the
     // closing bracket, so only split off a port when the text after the last colon is itself a
-    // valid port number; otherwise treat the whole raw key as the host and use the URL's port.
+    // valid port number; otherwise treat the whole raw key as the host with no explicit port.
     let (raw_host, raw_port) = match raw_key.rsplit_once(':') {
         Some((h, p)) => match p.parse::<u16>() {
             Ok(p) => (h.to_owned(), p),
-            Err(_) => (raw_key.clone(), port),
+            Err(_) => match scheme_default_port() {
+                Some(p) => (raw_key.to_owned(), p),
+                None => return false,
+            },
         },
-        None => (raw_key.clone(), port),
+        None => match scheme_default_port() {
+            Some(p) => (raw_key.to_owned(), p),
+            None => return false,
+        },
     };
     raw_host.eq_ignore_ascii_case(host) && raw_port == port
+}
+
+/// True when the raw-text host key and the parsed URL name the same host and port.
+/// The raw key matches the `coder` CLI's storage; the parsed URL is where requests really go.
+/// A `url` crate quirk treats `\` as `/` in special schemes like `https`, so
+/// `https://evil.example\@dev.coder.com` parses to host `evil.example` even though its raw
+/// text reads as `dev.coder.com` up to the last `@`. This catches that divergence.
+///
+/// `discover_with` does not call this directly: it extracts the raw key once and calls
+/// `host_key_agrees_with_url` with that same key, so the checked key and the key used for the
+/// keychain lookup cannot drift apart. This wrapper exists so tests can exercise the agreement
+/// check from raw text the same way the brief's tests do, without duplicating extraction.
+#[cfg(test)]
+fn host_keys_agree(raw_text: &str, url: &Url) -> bool {
+    host_key_from_text(raw_text, url).is_some_and(|raw_key| host_key_agrees_with_url(&raw_key, url))
 }
 
 /// Extracts the token for a specific host key from the `coder` CLI's keychain value.
@@ -185,7 +214,12 @@ pub fn discover_with(env: &dyn SessionEnv) -> Result<Session> {
 
     // Gate both stored-credential sources on the parsed URL actually naming the host its raw
     // text claims to, closing the `url`-crate backslash-parsing gap described on `host_keys_agree`.
-    let agree = host_keys_agree(trimmed_url_text, &url);
+    // Computed once so the key that gets validated and the key that gets looked up in the
+    // keychain are always the same value; see `host_key_agrees_with_url`.
+    let raw_host_key = host_key_from_text(trimmed_url_text, &url);
+    let agree = raw_host_key
+        .as_deref()
+        .is_some_and(|key| host_key_agrees_with_url(key, &url));
 
     let token = env
         .var("CODER_SESSION_TOKEN")
@@ -193,10 +227,8 @@ pub fn discover_with(env: &dyn SessionEnv) -> Result<Session> {
             if !agree {
                 return None;
             }
-            env.keychain().and_then(|blob| {
-                let key = host_key_from_text(trimmed_url_text, &url)?;
-                token_from_keychain_for_host(&blob, &key)
-            })
+            env.keychain()
+                .and_then(|blob| token_from_keychain_for_host(&blob, raw_host_key.as_deref()?))
         })
         .or_else(|| {
             if !agree || !session_file_matches_url {
@@ -463,5 +495,75 @@ mod tests {
     fn host_keys_agree_handles_bracketed_ipv6_default_port() {
         let url: url::Url = "https://[::1]/".parse().unwrap();
         assert!(super::host_keys_agree("https://[::1]/", &url));
+    }
+
+    // The `\@` trick from the earlier backslash tests also works when the injected authority
+    // adds a non-default port: the raw key (read up to the last `@`) loses the port entirely,
+    // so a naive "no port in the raw key means trust the URL's port" fallback would trivially
+    // agree with whatever port the URL parsed to. `host_key_agrees_with_url` must instead
+    // compare a port-less raw key against the scheme's default port.
+
+    #[test]
+    fn backslash_port_injection_never_selects_another_hosts_keychain_token() {
+        let mut env = FakeEnv::default();
+        env.vars.insert(
+            "CODER_URL".into(),
+            r"https://dev.coder.com:8443\@dev.coder.com".into(),
+        );
+        env.keychain = Some(keychain_blob("dev.coder.com", "test-token-keychain"));
+        let err = discover_with(&env).unwrap_err();
+        assert!(err.to_string().contains("coder login"), "{err}");
+    }
+
+    #[test]
+    fn backslash_port_injection_never_selects_another_hosts_session_file() {
+        let mut env = FakeEnv::default();
+        env.vars.insert(
+            "CODER_URL".into(),
+            r"https://dev.coder.com:8443\@dev.coder.com".into(),
+        );
+        env.files
+            .insert("/cfg/url".into(), "https://dev.coder.com".into());
+        env.files
+            .insert("/cfg/session".into(), "test-token-file".into());
+        let err = discover_with(&env).unwrap_err();
+        assert!(err.to_string().contains("coder login"), "{err}");
+    }
+
+    #[test]
+    fn backslash_port_injection_ipv6_never_selects_another_hosts_keychain_token() {
+        let mut env = FakeEnv::default();
+        env.vars
+            .insert("CODER_URL".into(), r"https://[::1]:8443\@[::1]".into());
+        env.keychain = Some(keychain_blob("[::1]", "test-token-keychain"));
+        let err = discover_with(&env).unwrap_err();
+        assert!(err.to_string().contains("coder login"), "{err}");
+    }
+
+    #[test]
+    fn backslash_port_injection_ipv6_never_selects_another_hosts_session_file() {
+        let mut env = FakeEnv::default();
+        env.vars
+            .insert("CODER_URL".into(), r"https://[::1]:8443\@[::1]".into());
+        env.files.insert("/cfg/url".into(), "https://[::1]".into());
+        env.files
+            .insert("/cfg/session".into(), "test-token-file".into());
+        let err = discover_with(&env).unwrap_err();
+        assert!(err.to_string().contains("coder login"), "{err}");
+    }
+
+    #[test]
+    fn keychain_with_nondefault_port_still_finds_token() {
+        let mut env = FakeEnv::default();
+        env.files
+            .insert("/cfg/url".into(), "https://dev.coder.com:8443/".into());
+        env.keychain = Some(keychain_blob(
+            "dev.coder.com:8443",
+            "test-token-nondefault-port",
+        ));
+        assert_eq!(
+            discover_with(&env).unwrap().token.expose_secret(),
+            "test-token-nondefault-port"
+        );
     }
 }
