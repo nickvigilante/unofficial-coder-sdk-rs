@@ -5,6 +5,7 @@ use futures::{SinkExt, StreamExt};
 use secrecy::SecretString;
 use tokio::net::TcpListener;
 use tokio::time::timeout;
+use tokio_tungstenite::tungstenite::Bytes;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
@@ -100,6 +101,29 @@ async fn unknown_event_type_is_yielded_not_fatal() {
 }
 
 #[tokio::test]
+async fn unknown_part_type_in_message_part_still_decodes() {
+    let frame = r#"[{"type":"message_part","message_part":{"role":"assistant","seq":1,"part":{"type":"a_part_type_from_the_future","text":"hi"}}}]"#;
+    let url = serve(vec![frame.into()], normal_close()).await;
+    let events: Vec<_> = timeout(
+        COLLECT_TIMEOUT,
+        client(&url)
+            .stream_chat(uuid::Uuid::new_v4(), None)
+            .await
+            .unwrap()
+            .collect(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(events.len(), 1);
+    let event = events[0].as_ref().unwrap();
+    assert_eq!(event.kind, StreamEventType::MessagePart);
+    assert!(
+        event.event.is_some(),
+        "an unknown part type must still decode"
+    );
+}
+
+#[tokio::test]
 async fn abnormal_close_yields_error_then_ends() {
     let url = serve(vec![r#"[{"type":"preview_reset"}]"#.into()], None).await;
     let events: Vec<_> = timeout(
@@ -160,7 +184,7 @@ async fn large_batched_frame_yields_all_events_in_order() {
         })
         .collect();
     let frame = format!("[{}]", events.join(","));
-    assert!(frame.len() > 1_000_000);
+    assert!(frame.len() > 1 << 20);
     let url = serve(vec![frame], normal_close()).await;
     let got: Vec<_> = timeout(
         COLLECT_TIMEOUT,
@@ -224,6 +248,34 @@ async fn watch_yields_one_event_per_frame_with_kind() {
         kinds,
         vec!["title_change".to_string(), "something_new".to_string()]
     );
+}
+
+#[tokio::test]
+async fn ping_is_answered_with_pong() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (tcp, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(tcp).await.unwrap();
+        let payload = Bytes::from_static(b"ping-payload");
+        ws.send(Message::Ping(payload.clone())).await.unwrap();
+        let reply = timeout(Duration::from_secs(5), ws.next())
+            .await
+            .expect("a pong within 5s")
+            .expect("the connection ended before replying with a pong")
+            .unwrap();
+        assert_eq!(reply, Message::Pong(payload));
+        ws.close(normal_close()).await.unwrap();
+    });
+    let url = format!("http://{addr}");
+    let got: Vec<_> = timeout(
+        COLLECT_TIMEOUT,
+        client(&url).watch_chats().await.unwrap().collect(),
+    )
+    .await
+    .unwrap();
+    assert!(got.is_empty());
+    server.await.unwrap();
 }
 
 /// Connects to the developer's real Coder deployment and confirms the WebSocket upgrade
