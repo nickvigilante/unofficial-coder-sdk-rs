@@ -102,6 +102,34 @@ fn host_key_from_text(raw_text: &str, url: &Url) -> Option<String> {
     })
 }
 
+/// True when the raw-text host key and the parsed URL name the same host and port.
+/// The raw key matches the `coder` CLI's storage; the parsed URL is where requests really go.
+/// A `url` crate quirk treats `\` as `/` in special schemes like `https`, so
+/// `https://evil.example\@dev.coder.com` parses to host `evil.example` even though its raw
+/// text reads as `dev.coder.com` up to the last `@`. This catches that divergence.
+fn host_keys_agree(raw_text: &str, url: &Url) -> bool {
+    let Some(raw_key) = host_key_from_text(raw_text, url) else {
+        return false;
+    };
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    let Some(port) = url.port_or_known_default() else {
+        return false;
+    };
+    // A bracketed IPv6 raw key (e.g. "[::1]:3000") has an internal colon on either side of the
+    // closing bracket, so only split off a port when the text after the last colon is itself a
+    // valid port number; otherwise treat the whole raw key as the host and use the URL's port.
+    let (raw_host, raw_port) = match raw_key.rsplit_once(':') {
+        Some((h, p)) => match p.parse::<u16>() {
+            Ok(p) => (h.to_owned(), p),
+            Err(_) => (raw_key.clone(), port),
+        },
+        None => (raw_key.clone(), port),
+    };
+    raw_host.eq_ignore_ascii_case(host) && raw_port == port
+}
+
 /// Extracts the token for a specific host key from the `coder` CLI's keychain value.
 pub fn token_from_keychain_for_host(blob_b64: &str, host_key: &str) -> Option<String> {
     let json = base64::engine::general_purpose::STANDARD
@@ -146,20 +174,32 @@ pub fn discover_with(env: &dyn SessionEnv) -> Result<Session> {
             let Ok(config_url): std::result::Result<Url, _> = config_trimmed.parse() else {
                 return false;
             };
-            host_key_from_text(trimmed_url_text, &url)
-                == host_key_from_text(config_trimmed, &config_url)
+            match (
+                host_key_from_text(trimmed_url_text, &url),
+                host_key_from_text(config_trimmed, &config_url),
+            ) {
+                (Some(a), Some(b)) => a == b,
+                _ => false,
+            }
         });
+
+    // Gate both stored-credential sources on the parsed URL actually naming the host its raw
+    // text claims to, closing the `url`-crate backslash-parsing gap described on `host_keys_agree`.
+    let agree = host_keys_agree(trimmed_url_text, &url);
 
     let token = env
         .var("CODER_SESSION_TOKEN")
         .or_else(|| {
+            if !agree {
+                return None;
+            }
             env.keychain().and_then(|blob| {
                 let key = host_key_from_text(trimmed_url_text, &url)?;
                 token_from_keychain_for_host(&blob, &key)
             })
         })
         .or_else(|| {
-            if !session_file_matches_url {
+            if !agree || !session_file_matches_url {
                 return None;
             }
             config_dir
@@ -364,5 +404,64 @@ mod tests {
     fn real_session() {
         let s = super::discover_session().expect("run `coder login` first");
         println!("found session for {}", s.url);
+    }
+
+    #[test]
+    fn backslash_userinfo_never_selects_another_hosts_keychain_token() {
+        let mut env = FakeEnv::default();
+        env.vars.insert(
+            "CODER_URL".into(),
+            r"https://evil.example\@dev.coder.com".into(),
+        );
+        env.keychain = Some(keychain_blob("dev.coder.com", "test-token-keychain"));
+        let err = discover_with(&env).unwrap_err();
+        assert!(err.to_string().contains("coder login"), "{err}");
+    }
+
+    #[test]
+    fn backslash_userinfo_never_selects_another_hosts_session_file() {
+        let mut env = FakeEnv::default();
+        env.vars.insert(
+            "CODER_URL".into(),
+            r"https://evil.example\@dev.coder.com".into(),
+        );
+        env.files
+            .insert("/cfg/url".into(), "https://dev.coder.com".into());
+        env.files
+            .insert("/cfg/session".into(), "test-token-file".into());
+        let err = discover_with(&env).unwrap_err();
+        assert!(err.to_string().contains("coder login"), "{err}");
+    }
+
+    #[test]
+    fn host_keys_agree_matches_default_ports_and_rejects_mismatch() {
+        let ok: url::Url = "https://dev.coder.com:443/".parse().unwrap();
+        assert!(super::host_keys_agree("https://dev.coder.com:443/", &ok));
+        let bad: url::Url = r"https://evil.example\@dev.coder.com".parse().unwrap();
+        assert!(!super::host_keys_agree(
+            r"https://evil.example\@dev.coder.com",
+            &bad
+        ));
+    }
+
+    #[test]
+    fn missing_host_keys_are_not_a_match() {
+        let url: url::Url = "file:///tmp/x".parse().unwrap();
+        assert!(!super::host_keys_agree("file:///tmp/x", &url));
+    }
+
+    #[test]
+    fn host_keys_agree_handles_bracketed_ipv6_with_port() {
+        let url: url::Url = "https://[::1]:3000/".parse().unwrap();
+        assert_eq!(url.host_str(), Some("[::1]"));
+        assert!(super::host_keys_agree("https://[::1]:3000/", &url));
+        let mismatched: url::Url = "https://[::1]:4000/".parse().unwrap();
+        assert!(!super::host_keys_agree("https://[::1]:3000/", &mismatched));
+    }
+
+    #[test]
+    fn host_keys_agree_handles_bracketed_ipv6_default_port() {
+        let url: url::Url = "https://[::1]/".parse().unwrap();
+        assert!(super::host_keys_agree("https://[::1]/", &url));
     }
 }

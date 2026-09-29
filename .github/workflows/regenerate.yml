@@ -62,7 +62,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REF: ${{ steps.ref.outputs.ref }}
         run: |
-          if git diff --quiet; then
+          if [ -z "$(git status --porcelain)" ]; then
             echo "No changes"
             exit 0
           fi
