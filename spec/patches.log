@@ -1,0 +1,210 @@
+multi-media-request	POST /api/v2/chats/files	10 media types -> application/octet-stream
+remap-media	POST /api/v2/chats/{chat}/workspace-files	*/* -> application/octet-stream
+remap-media	POST /api/v2/csp/reports 413	*/* -> application/octet-stream
+multi-success	POST /api/v2/files	merged identical ['200', '201'] into 2XX
+multi-success	GET /api/v2/organizations/{organization}/templates/{templatename}/versions/{templateversionname}/previous	kept 200 of ['200', '204'] (LOSSY)
+remap-media	PUT /api/v2/users/{user}/keys/{keyid}/expire 404	*/* -> application/octet-stream
+remap-media	PUT /api/v2/users/{user}/keys/{keyid}/expire 500	*/* -> application/octet-stream
+remap-media	GET /api/v2/workspaces/{workspace}/watch 200	text/event-stream -> application/octet-stream
+remap-media	PUT /scim/v2/Users/{id} 200	application/scim+json -> application/json
+remap-media	PATCH /scim/v2/Users/{id} 200	application/scim+json -> application/json
+array-format	$.paths./api/v2/organizations/{organization}/provisionerdaemons.get.parameters[2].schema	moved format uuid to items
+array-format	$.paths./api/v2/organizations/{organization}/provisionerjobs.get.parameters[2].schema	moved format uuid to items
+raw-field	codersdk.ChatMessagePart.args	json
+raw-field	codersdk.ChatMessagePart.data	bytes
+raw-field	codersdk.ChatMessagePart.provider_metadata	json
+raw-field	codersdk.ChatMessagePart.result	json
+raw-field	codersdk.CreateTestAuditLogRequest.additional_fields	json
+raw-field	codersdk.CreateWorkspaceBuildRequest.state	bytes
+raw-field	codersdk.DynamicTool.input_schema	json
+raw-field	codersdk.TemplateBuilderModuleVariable.default	json
+raw-field	codersdk.ToolResult.output	json
+raw-field	codersdk.UpdateWorkspaceBuildStateRequest.state	bytes
+open-enums	$.paths./api/experimental/ai/model-prices.get.parameters[2].schema	3 values
+open-enums	$.paths./api/v2/insights/templates.get.parameters[2].schema	2 values
+open-enums	$.paths./api/v2/notifications/inbox/watch.get.parameters[3].schema	2 values
+open-enums	$.paths./api/v2/organizations/{organization}/chats/model-overrides/{context}.put.parameters[1].schema	5 values
+open-enums	$.paths./api/v2/organizations/{organization}/members/{user}/chats/model-overrides/{context}.put.parameters[2].schema	3 values
+open-enums	$.paths./api/v2/organizations/{organization}/provisionerdaemons.get.parameters[3].schema	13 values
+open-enums	$.paths./api/v2/organizations/{organization}/provisionerjobs.get.parameters[3].schema	13 values
+open-enums	$.paths./api/v2/templateversions/{templateversion}/dry-run/{jobID}/logs.get.parameters[5].schema	2 values
+open-enums	$.paths./api/v2/templateversions/{templateversion}/logs.get.parameters[4].schema	2 values
+open-enums	$.paths./api/v2/workspaceagents/{workspaceagent}/logs.get.parameters[5].schema	2 values
+open-enums	$.paths./api/v2/workspacebuilds/{workspacebuild}/cancel.patch.parameters[1].schema	2 values
+open-enums	$.paths./api/v2/workspacebuilds/{workspacebuild}/logs.get.parameters[4].schema	2 values
+open-enums	$.paths./oauth2/authorize.get.parameters[2].schema	1 values
+open-enums	$.paths./oauth2/authorize.get.parameters[6].schema	1 values
+open-enums	$.paths./oauth2/authorize.post.parameters[2].schema	1 values
+open-enums	$.paths./oauth2/authorize.post.parameters[6].schema	1 values
+open-enums	$.paths./oauth2/tokens.post.requestBody.content.application/x-www-form-urlencoded.schema.properties.grant_type	5 values
+open-enums	$.components.schemas.agentsdk.ReinitializationReason	1 values
+open-enums	$.components.schemas.codersdk.AIBudgetLimitSource	2 values
+open-enums	$.components.schemas.codersdk.AIModelPriceSource	2 values
+open-enums	$.components.schemas.codersdk.AIProviderType	9 values
+open-enums	$.components.schemas.codersdk.APIKey.properties.login_type	4 values
+open-enums	$.components.schemas.codersdk.APIKey.properties.scope	2 values
+open-enums	$.components.schemas.codersdk.APIKeyScope	245 values
+open-enums	$.components.schemas.codersdk.AgentChatSendShortcut	2 values
+open-enums	$.components.schemas.codersdk.AgentDisplayMode	3 values
+open-enums	$.components.schemas.codersdk.AgentSubsystem	3 values
+open-enums	$.components.schemas.codersdk.AppFamilyName	6 values
+open-enums	$.components.schemas.codersdk.AuditAction	13 values
+open-enums	$.components.schemas.codersdk.AuthorizationCheck.properties.action	4 values
+open-enums	$.components.schemas.codersdk.AutomaticUpdates	2 values
+open-enums	$.components.schemas.codersdk.BuildReason	9 values
+open-enums	$.components.schemas.codersdk.CORSBehavior	2 values
+open-enums	$.components.schemas.codersdk.ChatBusyBehavior	2 values
+open-enums	$.components.schemas.codersdk.ChatClientType	2 values
+open-enums	$.components.schemas.codersdk.ChatContextResourceKind	4 values
+open-enums	$.components.schemas.codersdk.ChatContextResourceStatus	5 values
+open-enums	$.components.schemas.codersdk.ChatErrorKind	13 values
+open-enums	$.components.schemas.codersdk.ChatGroup.properties.role	1 values
+open-enums	$.components.schemas.codersdk.ChatInputPartType	4 values
+open-enums	$.components.schemas.codersdk.ChatMessagePartType	12 values
+open-enums	$.components.schemas.codersdk.ChatMessageRole	4 values
+open-enums	$.components.schemas.codersdk.ChatModelOverrideContext	5 values
+open-enums	$.components.schemas.codersdk.ChatModelProviderUnavailableReason	3 values
+open-enums	$.components.schemas.codersdk.ChatPersonalModelOverrideContext	3 values
+open-enums	$.components.schemas.codersdk.ChatPersonalModelOverrideMode	3 values
+open-enums	$.components.schemas.codersdk.ChatPlanMode	1 values
+open-enums	$.components.schemas.codersdk.ChatRole	2 values
+open-enums	$.components.schemas.codersdk.ChatStatus	5 values
+open-enums	$.components.schemas.codersdk.ChatStreamEventType	9 values
+open-enums	$.components.schemas.codersdk.ChatUser.properties.role	1 values
+open-enums	$.components.schemas.codersdk.ChatWatchEventKind	9 values
+open-enums	$.components.schemas.codersdk.ConnectionType	7 values
+open-enums	$.components.schemas.codersdk.CreateChatMessageRequest.properties.busy_behavior	2 values
+open-enums	$.components.schemas.codersdk.CreateMCPServerConfigRequest.properties.auth_type	5 values
+open-enums	$.components.schemas.codersdk.CreateMCPServerConfigRequest.properties.availability	3 values
+open-enums	$.components.schemas.codersdk.CreateMCPServerConfigRequest.properties.transport	2 values
+open-enums	$.components.schemas.codersdk.CreateTemplateVersionRequest.properties.provisioner	2 values
+open-enums	$.components.schemas.codersdk.CreateTemplateVersionRequest.properties.storage_method	1 values
+open-enums	$.components.schemas.codersdk.CreateTestAuditLogRequest.properties.action	5 values
+open-enums	$.components.schemas.codersdk.CreateTestAuditLogRequest.properties.build_reason	3 values
+open-enums	$.components.schemas.codersdk.CreateTestAuditLogRequest.properties.resource_type	7 values
+open-enums	$.components.schemas.codersdk.CreateWorkspaceBuildOnSuccessRequest.properties.transition	1 values
+open-enums	$.components.schemas.codersdk.CreateWorkspaceBuildReason	5 values
+open-enums	$.components.schemas.codersdk.CreateWorkspaceBuildRequest.properties.log_level	1 values
+open-enums	$.components.schemas.codersdk.CreateWorkspaceBuildRequest.properties.reason	5 values
+open-enums	$.components.schemas.codersdk.CreateWorkspaceBuildRequest.properties.transition	3 values
+open-enums	$.components.schemas.codersdk.CryptoKeyFeature	6 values
+open-enums	$.components.schemas.codersdk.DiagnosticSeverityString	2 values
+open-enums	$.components.schemas.codersdk.DisplayApp	5 values
+open-enums	$.components.schemas.codersdk.Entitlement	3 values
+open-enums	$.components.schemas.codersdk.Experiment	16 values
+open-enums	$.components.schemas.codersdk.GroupSource	2 values
+open-enums	$.components.schemas.codersdk.InsightsReportInterval	2 values
+open-enums	$.components.schemas.codersdk.JobErrorCode	2 values
+open-enums	$.components.schemas.codersdk.LinkConfig.properties.icon	4 values
+open-enums	$.components.schemas.codersdk.LinkConfig.properties.location	2 values
+open-enums	$.components.schemas.codersdk.LogLevel	5 values
+open-enums	$.components.schemas.codersdk.LogSource	2 values
+open-enums	$.components.schemas.codersdk.LoginType	6 values
+open-enums	$.components.schemas.codersdk.MCPServerConfigGroup.properties.role	1 values
+open-enums	$.components.schemas.codersdk.MCPServerConfigRole	2 values
+open-enums	$.components.schemas.codersdk.MCPServerConfigUser.properties.role	1 values
+open-enums	$.components.schemas.codersdk.OAuth2ClientType	2 values
+open-enums	$.components.schemas.codersdk.OAuth2ErrorCode	12 values
+open-enums	$.components.schemas.codersdk.OAuth2PKCECodeChallengeMethod	2 values
+open-enums	$.components.schemas.codersdk.OAuth2ProviderGrantType	5 values
+open-enums	$.components.schemas.codersdk.OAuth2ProviderResponseType	2 values
+open-enums	$.components.schemas.codersdk.OAuth2TokenEndpointAuthMethod	3 values
+open-enums	$.components.schemas.codersdk.OAuth2TokenType	2 values
+open-enums	$.components.schemas.codersdk.OptionType	4 values
+open-enums	$.components.schemas.codersdk.OrganizationMemberWithUserData.properties.status	2 values
+open-enums	$.components.schemas.codersdk.ParameterFormType	11 values
+open-enums	$.components.schemas.codersdk.PremiumFunnelSource	20 values
+open-enums	$.components.schemas.codersdk.PremiumFunnelVariant	3 values
+open-enums	$.components.schemas.codersdk.ProvisionerDaemon.properties.status	3 values
+open-enums	$.components.schemas.codersdk.ProvisionerDaemonJob.properties.status	6 values
+open-enums	$.components.schemas.codersdk.ProvisionerDaemonStatus	3 values
+open-enums	$.components.schemas.codersdk.ProvisionerJob.properties.error_code	2 values
+open-enums	$.components.schemas.codersdk.ProvisionerJob.properties.status	6 values
+open-enums	$.components.schemas.codersdk.ProvisionerJobLog.properties.log_level	5 values
+open-enums	$.components.schemas.codersdk.ProvisionerJobStatus	7 values
+open-enums	$.components.schemas.codersdk.ProvisionerJobType	3 values
+open-enums	$.components.schemas.codersdk.ProvisionerLogLevel	1 values
+open-enums	$.components.schemas.codersdk.ProvisionerStorageMethod	1 values
+open-enums	$.components.schemas.codersdk.ProxyHealthStatus	4 values
+open-enums	$.components.schemas.codersdk.RBACAction	18 values
+open-enums	$.components.schemas.codersdk.RBACResource	52 values
+open-enums	$.components.schemas.codersdk.ReducedUser.properties.status	2 values
+open-enums	$.components.schemas.codersdk.ResourceType	40 values
+open-enums	$.components.schemas.codersdk.SecretsFileFormat	3 values
+open-enums	$.components.schemas.codersdk.ServerSentEventType	3 values
+open-enums	$.components.schemas.codersdk.ShareableWorkspaceOwners	3 values
+open-enums	$.components.schemas.codersdk.SharedWorkspaceActor.properties.actor_type	2 values
+open-enums	$.components.schemas.codersdk.SharedWorkspaceActorType	2 values
+open-enums	$.components.schemas.codersdk.Template.properties.provisioner	1 values
+open-enums	$.components.schemas.codersdk.TemplateAppsType	2 values
+open-enums	$.components.schemas.codersdk.TemplateAutostartRequirement.properties.days_of_week.items	7 values
+open-enums	$.components.schemas.codersdk.TemplateAutostopRequirement.properties.days_of_week.items	7 values
+open-enums	$.components.schemas.codersdk.TemplateBuilderSessionEventType	2 values
+open-enums	$.components.schemas.codersdk.TemplateBuilderSessionRequest.properties.event_type	2 values
+open-enums	$.components.schemas.codersdk.TemplateBuilderVariableType	3 values
+open-enums	$.components.schemas.codersdk.TemplateGroup.properties.role	2 values
+open-enums	$.components.schemas.codersdk.TemplateRole	3 values
+open-enums	$.components.schemas.codersdk.TemplateUser.properties.role	2 values
+open-enums	$.components.schemas.codersdk.TemplateUser.properties.status	2 values
+open-enums	$.components.schemas.codersdk.TemplateVersionParameter.properties.form_type	11 values
+open-enums	$.components.schemas.codersdk.TemplateVersionParameter.properties.type	4 values
+open-enums	$.components.schemas.codersdk.TemplateVersionParameter.properties.validation_monotonic	2 values
+open-enums	$.components.schemas.codersdk.TemplateVersionVariable.properties.type	3 values
+open-enums	$.components.schemas.codersdk.TemplateVersionWarning	1 values
+open-enums	$.components.schemas.codersdk.TerminalFontName	6 values
+open-enums	$.components.schemas.codersdk.ThemeMode	3 values
+open-enums	$.components.schemas.codersdk.ThinkingDisplayMode	4 values
+open-enums	$.components.schemas.codersdk.TimingStage	8 values
+open-enums	$.components.schemas.codersdk.UpdateMCPServerConfigRequest.properties.auth_type	5 values
+open-enums	$.components.schemas.codersdk.UpdateMCPServerConfigRequest.properties.availability	3 values
+open-enums	$.components.schemas.codersdk.UpdateMCPServerConfigRequest.properties.transport	2 values
+open-enums	$.components.schemas.codersdk.UpdateUserAppearanceSettingsRequest.properties.theme_dark	6 values
+open-enums	$.components.schemas.codersdk.UpdateUserAppearanceSettingsRequest.properties.theme_light	6 values
+open-enums	$.components.schemas.codersdk.UpdateUserAppearanceSettingsRequest.properties.theme_mode	2 values
+open-enums	$.components.schemas.codersdk.UpdateWorkspaceSharingSettingsRequest.properties.shareable_workspace_owners	3 values
+open-enums	$.components.schemas.codersdk.UpsertWorkspaceAgentPortShareRequest.properties.protocol	2 values
+open-enums	$.components.schemas.codersdk.UpsertWorkspaceAgentPortShareRequest.properties.share_level	4 values
+open-enums	$.components.schemas.codersdk.User.properties.status	2 values
+open-enums	$.components.schemas.codersdk.UserStatus	3 values
+open-enums	$.components.schemas.codersdk.ValidationMonotonicOrder	2 values
+open-enums	$.components.schemas.codersdk.Workspace.properties.automatic_updates	2 values
+open-enums	$.components.schemas.codersdk.WorkspaceAgentDevcontainerStatus	6 values
+open-enums	$.components.schemas.codersdk.WorkspaceAgentGitServerMessageType	2 values
+open-enums	$.components.schemas.codersdk.WorkspaceAgentLifecycle	9 values
+open-enums	$.components.schemas.codersdk.WorkspaceAgentPortShare.properties.protocol	2 values
+open-enums	$.components.schemas.codersdk.WorkspaceAgentPortShare.properties.share_level	4 values
+open-enums	$.components.schemas.codersdk.WorkspaceAgentPortShareLevel	4 values
+open-enums	$.components.schemas.codersdk.WorkspaceAgentPortShareProtocol	2 values
+open-enums	$.components.schemas.codersdk.WorkspaceAgentScriptStatus	4 values
+open-enums	$.components.schemas.codersdk.WorkspaceAgentStartupScriptBehavior	2 values
+open-enums	$.components.schemas.codersdk.WorkspaceAgentStatus	4 values
+open-enums	$.components.schemas.codersdk.WorkspaceApp.properties.sharing_level	4 values
+open-enums	$.components.schemas.codersdk.WorkspaceAppHealth	4 values
+open-enums	$.components.schemas.codersdk.WorkspaceAppOpenIn	2 values
+open-enums	$.components.schemas.codersdk.WorkspaceAppSharingLevel	4 values
+open-enums	$.components.schemas.codersdk.WorkspaceAppStatusState	4 values
+open-enums	$.components.schemas.codersdk.WorkspaceBuild.properties.reason	3 values
+open-enums	$.components.schemas.codersdk.WorkspaceBuild.properties.status	10 values
+open-enums	$.components.schemas.codersdk.WorkspaceBuild.properties.transition	3 values
+open-enums	$.components.schemas.codersdk.WorkspaceGroup.properties.role	2 values
+open-enums	$.components.schemas.codersdk.WorkspaceResource.properties.workspace_transition	3 values
+open-enums	$.components.schemas.codersdk.WorkspaceRole	3 values
+open-enums	$.components.schemas.codersdk.WorkspaceSharingSettings.properties.shareable_workspace_owners	3 values
+open-enums	$.components.schemas.codersdk.WorkspaceStatus	10 values
+open-enums	$.components.schemas.codersdk.WorkspaceTransition	3 values
+open-enums	$.components.schemas.codersdk.WorkspaceUser.properties.role	2 values
+open-enums	$.components.schemas.health.Code	19 values
+open-enums	$.components.schemas.health.Severity	3 values
+open-enums	$.components.schemas.healthsdk.AccessURLReport.properties.severity	3 values
+open-enums	$.components.schemas.healthsdk.DERPHealthReport.properties.severity	3 values
+open-enums	$.components.schemas.healthsdk.DERPNodeReport.properties.severity	3 values
+open-enums	$.components.schemas.healthsdk.DERPRegionReport.properties.severity	3 values
+open-enums	$.components.schemas.healthsdk.DatabaseReport.properties.severity	3 values
+open-enums	$.components.schemas.healthsdk.HealthSection	6 values
+open-enums	$.components.schemas.healthsdk.HealthcheckReport.properties.severity	3 values
+open-enums	$.components.schemas.healthsdk.ProvisionerDaemonsReport.properties.severity	3 values
+open-enums	$.components.schemas.healthsdk.WebsocketReport.properties.severity	3 values
+open-enums	$.components.schemas.healthsdk.WorkspaceProxyReport.properties.severity	3 values
+open-enums	$.components.schemas.serpent.ValueSource	5 values
+open-enums	$.components.schemas.workspaceapps.AccessMethod	3 values
+open-enums	$.components.schemas.workspacesdk.WatchErrorCode	7 values

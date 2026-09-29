@@ -1,0 +1,1377 @@
+[
+  {
+    "definition": "agentcontext.Resource",
+    "property": "Payload",
+    "kind": "bytes"
+  },
+  {
+    "definition": "agenthooks.Permission",
+    "property": "input_override",
+    "kind": "json"
+  },
+  {
+    "definition": "agenthooks.PostToolUseData",
+    "property": "tool_response",
+    "kind": "json"
+  },
+  {
+    "definition": "agenthooks.PreToolUseData",
+    "property": "tool_input",
+    "kind": "json"
+  },
+  {
+    "definition": "agenthooks.Request",
+    "property": "data",
+    "kind": "json"
+  },
+  {
+    "definition": "agenthooks.UserPromptSubmitData",
+    "property": "parts",
+    "kind": "json"
+  },
+  {
+    "definition": "agentproc.HeadTailBuffer",
+    "property": "head",
+    "kind": "bytes"
+  },
+  {
+    "definition": "agentproc.HeadTailBuffer",
+    "property": "tail",
+    "kind": "bytes"
+  },
+  {
+    "definition": "agentssh.xauthEntry",
+    "property": "authCookie",
+    "kind": "bytes"
+  },
+  {
+    "definition": "aibridgeproxyd.Server",
+    "property": "caCert",
+    "kind": "bytes"
+  },
+  {
+    "definition": "apidump.streamingBodyDumper",
+    "property": "headerData",
+    "kind": "bytes"
+  },
+  {
+    "definition": "audit.BackgroundAuditParams",
+    "property": "AdditionalFields",
+    "kind": "json"
+  },
+  {
+    "definition": "backedpipe.ringBuffer",
+    "property": "buffer",
+    "kind": "bytes"
+  },
+  {
+    "definition": "chatd.CreateOptions",
+    "property": "DynamicTools",
+    "kind": "json"
+  },
+  {
+    "definition": "chatdebug.Attempt",
+    "property": "request_body",
+    "kind": "bytes"
+  },
+  {
+    "definition": "chatdebug.Attempt",
+    "property": "response_body",
+    "kind": "bytes"
+  },
+  {
+    "definition": "chatdebug.normalizedTool",
+    "property": "input_schema",
+    "kind": "json"
+  },
+  {
+    "definition": "chathooks.Message",
+    "property": "Parts",
+    "kind": "json"
+  },
+  {
+    "definition": "chathooks.Message",
+    "property": "ToolInput",
+    "kind": "json"
+  },
+  {
+    "definition": "chathooks.Message",
+    "property": "ToolResponse",
+    "kind": "json"
+  },
+  {
+    "definition": "chathooks.Result",
+    "property": "InputOverride",
+    "kind": "json"
+  },
+  {
+    "definition": "chatprompt.FileData",
+    "property": "Data",
+    "kind": "bytes"
+  },
+  {
+    "definition": "chatprompt.toolResultRaw",
+    "property": "provider_metadata",
+    "kind": "json"
+  },
+  {
+    "definition": "chatprompt.toolResultRaw",
+    "property": "result",
+    "kind": "json"
+  },
+  {
+    "definition": "chatstate.ToolResultInput",
+    "property": "Output",
+    "kind": "json"
+  },
+  {
+    "definition": "chatstate.bufferedMessage",
+    "property": "Payload",
+    "kind": "bytes"
+  },
+  {
+    "definition": "chattest.AnthropicContentBlock",
+    "property": "input",
+    "kind": "json"
+  },
+  {
+    "definition": "chattest.AnthropicRequest",
+    "property": "output_config",
+    "kind": "json"
+  },
+  {
+    "definition": "chattest.AnthropicRequest",
+    "property": "system",
+    "kind": "json"
+  },
+  {
+    "definition": "chattest.AnthropicRequest",
+    "property": "thinking",
+    "kind": "json"
+  },
+  {
+    "definition": "chattest.AnthropicRequestMessage",
+    "property": "content",
+    "kind": "json"
+  },
+  {
+    "definition": "chattool.SkillMeta",
+    "property": "Meta",
+    "kind": "bytes"
+  },
+  {
+    "definition": "cli.cookieAddr",
+    "property": "cookie",
+    "kind": "bytes"
+  },
+  {
+    "definition": "coderd.Options",
+    "property": "SCIMAPIKey",
+    "kind": "bytes"
+  },
+  {
+    "definition": "coderdenttest.Options",
+    "property": "SCIMAPIKey",
+    "kind": "bytes"
+  },
+  {
+    "definition": "coderdtest.DynamicParameterTemplateParams",
+    "property": "ModulesArchive",
+    "kind": "bytes"
+  },
+  {
+    "definition": "coderdtest.DynamicParameterTemplateParams",
+    "property": "Plan",
+    "kind": "json"
+  },
+  {
+    "definition": "codersdk.ChatMessagePart",
+    "property": "args",
+    "kind": "json"
+  },
+  {
+    "definition": "codersdk.ChatMessagePart",
+    "property": "data",
+    "kind": "bytes"
+  },
+  {
+    "definition": "codersdk.ChatMessagePart",
+    "property": "provider_metadata",
+    "kind": "json"
+  },
+  {
+    "definition": "codersdk.ChatMessagePart",
+    "property": "result",
+    "kind": "json"
+  },
+  {
+    "definition": "codersdk.CreateTestAuditLogRequest",
+    "property": "additional_fields",
+    "kind": "json"
+  },
+  {
+    "definition": "codersdk.CreateWorkspaceBuildRequest",
+    "property": "state",
+    "kind": "bytes"
+  },
+  {
+    "definition": "codersdk.DynamicTool",
+    "property": "input_schema",
+    "kind": "json"
+  },
+  {
+    "definition": "codersdk.TemplateBuilderModuleVariable",
+    "property": "default",
+    "kind": "json"
+  },
+  {
+    "definition": "codersdk.ToolResult",
+    "property": "output",
+    "kind": "json"
+  },
+  {
+    "definition": "codersdk.UpdateWorkspaceBuildStateRequest",
+    "property": "state",
+    "kind": "bytes"
+  },
+  {
+    "definition": "codersdk.bodyPrefixWriter",
+    "property": "bytes",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.AIGatewayKey",
+    "property": "hashed_secret",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.APIKey",
+    "property": "hashed_secret",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.AcquireNotificationMessagesRow",
+    "property": "payload",
+    "kind": "json"
+  },
+  {
+    "definition": "database.AcquireProvisionerJobParams",
+    "property": "provisioner_tags",
+    "kind": "json"
+  },
+  {
+    "definition": "database.AuditLog",
+    "property": "additional_fields",
+    "kind": "json"
+  },
+  {
+    "definition": "database.AuditLog",
+    "property": "diff",
+    "kind": "json"
+  },
+  {
+    "definition": "database.AutoArchiveInactiveChatsRow",
+    "property": "context_aggregate_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.AutoArchiveInactiveChatsRow",
+    "property": "group_acl",
+    "kind": "json"
+  },
+  {
+    "definition": "database.AutoArchiveInactiveChatsRow",
+    "property": "labels",
+    "kind": "json"
+  },
+  {
+    "definition": "database.AutoArchiveInactiveChatsRow",
+    "property": "user_acl",
+    "kind": "json"
+  },
+  {
+    "definition": "database.Chat",
+    "property": "context_aggregate_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.ChatContextResource",
+    "property": "body",
+    "kind": "json"
+  },
+  {
+    "definition": "database.ChatContextResource",
+    "property": "content_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.ChatDebugRun",
+    "property": "summary",
+    "kind": "json"
+  },
+  {
+    "definition": "database.ChatDebugStep",
+    "property": "attempts",
+    "kind": "json"
+  },
+  {
+    "definition": "database.ChatDebugStep",
+    "property": "metadata",
+    "kind": "json"
+  },
+  {
+    "definition": "database.ChatDebugStep",
+    "property": "normalized_request",
+    "kind": "json"
+  },
+  {
+    "definition": "database.ChatFile",
+    "property": "data",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.ChatModelConfig",
+    "property": "options",
+    "kind": "json"
+  },
+  {
+    "definition": "database.ChatQueuedMessage",
+    "property": "content",
+    "kind": "json"
+  },
+  {
+    "definition": "database.ChatTable",
+    "property": "context_aggregate_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.EnqueueNotificationMessageParams",
+    "property": "payload",
+    "kind": "json"
+  },
+  {
+    "definition": "database.FetchNewMessageMetadataRow",
+    "property": "actions",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.File",
+    "property": "data",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.GetAutoArchiveInactiveChatCandidatesRow",
+    "property": "context_aggregate_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.GetChatFileDataPrefixesByIDsRow",
+    "property": "data_prefix",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.GetDeploymentWorkspaceAgentStatsRow",
+    "property": "session_counts",
+    "kind": "json"
+  },
+  {
+    "definition": "database.GetDeploymentWorkspaceAgentUsageStatsRow",
+    "property": "session_counts",
+    "kind": "json"
+  },
+  {
+    "definition": "database.GetGroupMembersByGroupIDPaginatedRow",
+    "property": "user_hashed_password",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.GetTailnetTunnelPeerBindingsBatchRow",
+    "property": "node",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.GetTemplateInsightsRow",
+    "property": "session_app_template_ids",
+    "kind": "json"
+  },
+  {
+    "definition": "database.GetTemplateInsightsRow",
+    "property": "session_app_usage_seconds",
+    "kind": "json"
+  },
+  {
+    "definition": "database.GetTemplateParameterInsightsRow",
+    "property": "options",
+    "kind": "json"
+  },
+  {
+    "definition": "database.GetUsersRow",
+    "property": "hashed_one_time_passcode",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.GetUsersRow",
+    "property": "hashed_password",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.GetWorkspaceAgentStatsAndLabelsRow",
+    "property": "session_counts",
+    "kind": "json"
+  },
+  {
+    "definition": "database.GetWorkspaceAgentStatsRow",
+    "property": "session_counts",
+    "kind": "json"
+  },
+  {
+    "definition": "database.GetWorkspaceAgentUsageStatsAndLabelsRow",
+    "property": "session_counts",
+    "kind": "json"
+  },
+  {
+    "definition": "database.GetWorkspaceAgentUsageStatsRow",
+    "property": "session_counts",
+    "kind": "json"
+  },
+  {
+    "definition": "database.GetWorkspaceBuildProvisionerStateByIDRow",
+    "property": "provisioner_state",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.GetWorkspacesRow",
+    "property": "agent_metadata",
+    "kind": "json"
+  },
+  {
+    "definition": "database.GetWorkspacesRow",
+    "property": "group_acl",
+    "kind": "json"
+  },
+  {
+    "definition": "database.GetWorkspacesRow",
+    "property": "user_acl",
+    "kind": "json"
+  },
+  {
+    "definition": "database.GroupMember",
+    "property": "user_hashed_password",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.HydrateAgentChatsContextParams",
+    "property": "aggregate_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.InboxNotification",
+    "property": "actions",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertAIBridgeInterceptionParams",
+    "property": "metadata",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertAIBridgeModelThoughtParams",
+    "property": "metadata",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertAIBridgeTokenUsageParams",
+    "property": "metadata",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertAIBridgeToolUsageParams",
+    "property": "metadata",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertAIBridgeUserPromptParams",
+    "property": "metadata",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertAIGatewayKeyParams",
+    "property": "hashed_secret",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.InsertAPIKeyParams",
+    "property": "hashed_secret",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.InsertAuditLogParams",
+    "property": "additional_fields",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertAuditLogParams",
+    "property": "diff",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertChatFileParams",
+    "property": "data",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.InsertChatModelConfigParams",
+    "property": "options",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertChatQueuedMessageParams",
+    "property": "content",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertChatQueuedMessageWithCreatorParams",
+    "property": "content",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertFileParams",
+    "property": "data",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.InsertInboxNotificationParams",
+    "property": "actions",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertOAuth2ProviderAppCodeParams",
+    "property": "hashed_secret",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.InsertOAuth2ProviderAppCodeParams",
+    "property": "secret_prefix",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.InsertOAuth2ProviderAppParams",
+    "property": "registration_access_token",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.InsertOAuth2ProviderAppSecretParams",
+    "property": "hashed_secret",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.InsertOAuth2ProviderAppSecretParams",
+    "property": "secret_prefix",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.InsertOAuth2ProviderAppTokenParams",
+    "property": "hash_prefix",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.InsertOAuth2ProviderAppTokenParams",
+    "property": "refresh_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.InsertProvisionerJobParams",
+    "property": "input",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertProvisionerKeyParams",
+    "property": "hashed_secret",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.InsertTemplateVersionParameterParams",
+    "property": "options",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertTemplateVersionTerraformValuesByJobIDParams",
+    "property": "cached_plan",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertUsageEventParams",
+    "property": "event_data",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertUserParams",
+    "property": "hashed_password",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.InsertWorkspaceAgentStatsParams",
+    "property": "connections_by_proto",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertWorkspaceAgentStatsParams",
+    "property": "session_counts",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertWorkspaceBuildOrchestrationParams",
+    "property": "child_rich_parameter_values",
+    "kind": "json"
+  },
+  {
+    "definition": "database.InsertWorkspaceBuildParams",
+    "property": "provisioner_state",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.InsertWorkspaceProxyParams",
+    "property": "token_hashed_secret",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.ListAIBridgeSessionsRow",
+    "property": "metadata",
+    "kind": "json"
+  },
+  {
+    "definition": "database.MarkChatsContextDirtyByAgentParams",
+    "property": "aggregate_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.NotificationMessage",
+    "property": "payload",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.NotificationTemplate",
+    "property": "actions",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.OAuth2ProviderApp",
+    "property": "registration_access_token",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.OAuth2ProviderAppCode",
+    "property": "hashed_secret",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.OAuth2ProviderAppCode",
+    "property": "secret_prefix",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.OAuth2ProviderAppSecret",
+    "property": "hashed_secret",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.OAuth2ProviderAppSecret",
+    "property": "secret_prefix",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.OAuth2ProviderAppToken",
+    "property": "hash_prefix",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.OAuth2ProviderAppToken",
+    "property": "refresh_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.ProvisionerJob",
+    "property": "input",
+    "kind": "json"
+  },
+  {
+    "definition": "database.ProvisionerKey",
+    "property": "hashed_secret",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.SetChatContextSnapshotParams",
+    "property": "aggregate_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.TailnetPeer",
+    "property": "node",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.TemplateVersion",
+    "property": "external_auth_providers",
+    "kind": "json"
+  },
+  {
+    "definition": "database.TemplateVersionParameter",
+    "property": "options",
+    "kind": "json"
+  },
+  {
+    "definition": "database.TemplateVersionTable",
+    "property": "external_auth_providers",
+    "kind": "json"
+  },
+  {
+    "definition": "database.TemplateVersionTerraformValue",
+    "property": "cached_plan",
+    "kind": "json"
+  },
+  {
+    "definition": "database.UpdateChatLabelsByIDParams",
+    "property": "labels",
+    "kind": "json"
+  },
+  {
+    "definition": "database.UpdateChatModelConfigParams",
+    "property": "options",
+    "kind": "json"
+  },
+  {
+    "definition": "database.UpdateChatRetryStateParams",
+    "property": "retry_state",
+    "kind": "json"
+  },
+  {
+    "definition": "database.UpdateTemplateVersionExternalAuthProvidersByJobIDParams",
+    "property": "external_auth_providers",
+    "kind": "json"
+  },
+  {
+    "definition": "database.UpdateUserHashedOneTimePasscodeParams",
+    "property": "hashed_one_time_passcode",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.UpdateUserHashedPasswordParams",
+    "property": "hashed_password",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.UpdateWorkspaceBuildProvisionerStateByIDParams",
+    "property": "provisioner_state",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.UpdateWorkspaceProxyParams",
+    "property": "token_hashed_secret",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.UpsertAIModelPricesParams",
+    "property": "seed",
+    "kind": "json"
+  },
+  {
+    "definition": "database.UpsertTailnetPeerParams",
+    "property": "node",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.UpsertWorkspaceAgentContextResourceParams",
+    "property": "body",
+    "kind": "json"
+  },
+  {
+    "definition": "database.UpsertWorkspaceAgentContextResourceParams",
+    "property": "content_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.UpsertWorkspaceAgentContextSnapshotParams",
+    "property": "aggregate_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.UsageEvent",
+    "property": "event_data",
+    "kind": "json"
+  },
+  {
+    "definition": "database.UsageEventsDaily",
+    "property": "usage_data",
+    "kind": "json"
+  },
+  {
+    "definition": "database.User",
+    "property": "hashed_one_time_passcode",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.User",
+    "property": "hashed_password",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.WorkspaceAgentContextResource",
+    "property": "body",
+    "kind": "json"
+  },
+  {
+    "definition": "database.WorkspaceAgentContextResource",
+    "property": "content_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.WorkspaceAgentContextSnapshot",
+    "property": "aggregate_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.WorkspaceAgentStat",
+    "property": "connections_by_proto",
+    "kind": "json"
+  },
+  {
+    "definition": "database.WorkspaceAgentStat",
+    "property": "session_counts",
+    "kind": "json"
+  },
+  {
+    "definition": "database.WorkspaceBuildOrchestration",
+    "property": "child_rich_parameter_values",
+    "kind": "json"
+  },
+  {
+    "definition": "database.WorkspaceBuildTable",
+    "property": "provisioner_state",
+    "kind": "bytes"
+  },
+  {
+    "definition": "database.WorkspaceProxy",
+    "property": "token_hashed_secret",
+    "kind": "bytes"
+  },
+  {
+    "definition": "dbfake.WorkspaceBuildBuilder",
+    "property": "provisionerState",
+    "kind": "bytes"
+  },
+  {
+    "definition": "dispatch.Dispatcher",
+    "property": "secret",
+    "kind": "bytes"
+  },
+  {
+    "definition": "eventstream.EventStream",
+    "property": "pingPayload",
+    "kind": "bytes"
+  },
+  {
+    "definition": "expecter.chanReader",
+    "property": "buf",
+    "kind": "bytes"
+  },
+  {
+    "definition": "expecter.stdbuf",
+    "property": "b",
+    "kind": "bytes"
+  },
+  {
+    "definition": "filefinder.queryPlan",
+    "property": "BasenameQ",
+    "kind": "bytes"
+  },
+  {
+    "definition": "gitprovider.cachedResponse",
+    "property": "body",
+    "kind": "bytes"
+  },
+  {
+    "definition": "googleopenai.thoughtStreamBody",
+    "property": "pending",
+    "kind": "bytes"
+  },
+  {
+    "definition": "legacyscim.LegacyServer",
+    "property": "SCIMAPIKey",
+    "kind": "bytes"
+  },
+  {
+    "definition": "main.ModuleVariable",
+    "property": "default",
+    "kind": "json"
+  },
+  {
+    "definition": "main.checker",
+    "property": "src",
+    "kind": "bytes"
+  },
+  {
+    "definition": "main.eventLog",
+    "property": "tool_input",
+    "kind": "json"
+  },
+  {
+    "definition": "main.eventLog",
+    "property": "tool_output",
+    "kind": "json"
+  },
+  {
+    "definition": "main.logWriter",
+    "property": "buf",
+    "kind": "bytes"
+  },
+  {
+    "definition": "oauth2provider.HashedAppSecret",
+    "property": "Hashed",
+    "kind": "bytes"
+  },
+  {
+    "definition": "oauthpki.ConfigParams",
+    "property": "PemEncodedCert",
+    "kind": "bytes"
+  },
+  {
+    "definition": "oauthpki.ConfigParams",
+    "property": "PemEncodedKey",
+    "kind": "bytes"
+  },
+  {
+    "definition": "overrides.Overrides",
+    "property": "Field",
+    "kind": "json"
+  },
+  {
+    "definition": "proto.AcquiredJob",
+    "property": "template_source_archive",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.AcquiredJob_WorkspaceBuild",
+    "property": "state",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.Agent",
+    "property": "id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.Agent",
+    "property": "workspace_id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.ApplyComplete",
+    "property": "state",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.BatchCreateLogsRequest",
+    "property": "log_source_id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.BatchUpdateAppHealthRequest_HealthUpdate",
+    "property": "id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.ChunkPiece",
+    "property": "data",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.ChunkPiece",
+    "property": "full_data_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.CompletedJob_TemplateImport",
+    "property": "module_files",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.CompletedJob_TemplateImport",
+    "property": "module_files_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.CompletedJob_TemplateImport",
+    "property": "plan",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.CompletedJob_WorkspaceBuild",
+    "property": "state",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.Connection",
+    "property": "id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.ContextResource",
+    "property": "content_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.CoordinateRequest_ReadyForHandshake",
+    "property": "id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.CoordinateRequest_Tunnel",
+    "property": "id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.CoordinateResponse_PeerUpdate",
+    "property": "id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.CreateSubAgentRequest",
+    "property": "id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.DataBuilder",
+    "property": "Hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.DataBuilder",
+    "property": "data",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.DataUpload",
+    "property": "data_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.DeleteSubAgentRequest",
+    "property": "id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.FailedJob_WorkspaceBuild",
+    "property": "state",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.InitComplete",
+    "property": "module_files",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.InitComplete",
+    "property": "module_files_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.InitRequest",
+    "property": "initial_module_tar_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.InitRequest",
+    "property": "template_source_archive",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.InstructionFileBody",
+    "property": "content",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.Manifest",
+    "property": "agent_id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.Manifest",
+    "property": "parent_id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.Manifest",
+    "property": "workspace_id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.Node",
+    "property": "key",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.ParseComplete",
+    "property": "readme",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.PlanComplete",
+    "property": "plan",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.PlanRequest",
+    "property": "state",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.PushContextStateRequest",
+    "property": "aggregate_hash",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.SkillMetaBody",
+    "property": "meta",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.SubAgent",
+    "property": "auth_token",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.SubAgent",
+    "property": "id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.TelemetryEvent",
+    "property": "id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.Timing",
+    "property": "script_id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.UpdateJobRequest",
+    "property": "readme",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.Workspace",
+    "property": "id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.WorkspaceAgentDevcontainer",
+    "property": "id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.WorkspaceAgentDevcontainer",
+    "property": "subagent_id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.WorkspaceAgentScript",
+    "property": "id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.WorkspaceAgentScript",
+    "property": "log_source_id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.WorkspaceApp",
+    "property": "id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.WorkspaceSecret",
+    "property": "value",
+    "kind": "bytes"
+  },
+  {
+    "definition": "proto.WorkspaceUpdatesRequest",
+    "property": "workspace_owner_id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "provisionersdk.InitRequest",
+    "property": "ModuleArchive",
+    "kind": "bytes"
+  },
+  {
+    "definition": "pubsub.msgOrErr",
+    "property": "msg",
+    "kind": "bytes"
+  },
+  {
+    "definition": "runner.templateImportProvision",
+    "property": "Plan",
+    "kind": "json"
+  },
+  {
+    "definition": "scim.Options",
+    "property": "SCIMAPIKey",
+    "kind": "bytes"
+  },
+  {
+    "definition": "support.Agent",
+    "property": "agent_magicsock_html",
+    "kind": "bytes"
+  },
+  {
+    "definition": "support.Agent",
+    "property": "client_magicsock_html",
+    "kind": "bytes"
+  },
+  {
+    "definition": "support.Agent",
+    "property": "logs",
+    "kind": "bytes"
+  },
+  {
+    "definition": "support.Agent",
+    "property": "prometheus",
+    "kind": "bytes"
+  },
+  {
+    "definition": "support.Agent",
+    "property": "workspace_files_archive",
+    "kind": "bytes"
+  },
+  {
+    "definition": "support.Bundle",
+    "property": "cli_logs",
+    "kind": "bytes"
+  },
+  {
+    "definition": "support.Deployment",
+    "property": "prometheus",
+    "kind": "bytes"
+  },
+  {
+    "definition": "support.PprofCollection",
+    "property": "allocs",
+    "kind": "bytes"
+  },
+  {
+    "definition": "support.PprofCollection",
+    "property": "block",
+    "kind": "bytes"
+  },
+  {
+    "definition": "support.PprofCollection",
+    "property": "goroutine",
+    "kind": "bytes"
+  },
+  {
+    "definition": "support.PprofCollection",
+    "property": "heap",
+    "kind": "bytes"
+  },
+  {
+    "definition": "support.PprofCollection",
+    "property": "mutex",
+    "kind": "bytes"
+  },
+  {
+    "definition": "support.PprofCollection",
+    "property": "profile",
+    "kind": "bytes"
+  },
+  {
+    "definition": "support.PprofCollection",
+    "property": "threadcreate",
+    "kind": "bytes"
+  },
+  {
+    "definition": "support.PprofCollection",
+    "property": "trace",
+    "kind": "bytes"
+  },
+  {
+    "definition": "telemetry.Deployment",
+    "property": "agents_experiments",
+    "kind": "json"
+  },
+  {
+    "definition": "templatebuilder.ComposeResult",
+    "property": "MainTF",
+    "kind": "bytes"
+  },
+  {
+    "definition": "templatebuilder.ComposeResult",
+    "property": "ModulesTF",
+    "kind": "bytes"
+  },
+  {
+    "definition": "templatebuilder.ComposeResult",
+    "property": "Readme",
+    "kind": "bytes"
+  },
+  {
+    "definition": "templatebuilder.ModuleVariable",
+    "property": "default",
+    "kind": "json"
+  },
+  {
+    "definition": "testutil.ReceivedRequest",
+    "property": "Body",
+    "kind": "bytes"
+  },
+  {
+    "definition": "testutil.UpstreamResponse",
+    "property": "Blocking",
+    "kind": "bytes"
+  },
+  {
+    "definition": "testutil.UpstreamResponse",
+    "property": "Streaming",
+    "kind": "bytes"
+  },
+  {
+    "definition": "toolsdk.WorkspaceReadFileResponse",
+    "property": "content",
+    "kind": "bytes"
+  },
+  {
+    "definition": "toolsdk.WorkspaceWriteFileArgs",
+    "property": "content",
+    "kind": "bytes"
+  },
+  {
+    "definition": "tracing.StatusWriter",
+    "property": "responseBody",
+    "kind": "bytes"
+  },
+  {
+    "definition": "usagetypes.TallymanV1IngestEvent",
+    "property": "event_data",
+    "kind": "json"
+  },
+  {
+    "definition": "vpn.Agent",
+    "property": "id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "vpn.Agent",
+    "property": "workspace_id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "vpn.Workspace",
+    "property": "id",
+    "kind": "bytes"
+  },
+  {
+    "definition": "wsbuilder.stateTarget",
+    "property": "explicit",
+    "kind": "bytes"
+  }
+]
