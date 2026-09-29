@@ -56,7 +56,7 @@ async fn generated_list_chats_decodes_real_response() {
 async fn stream_snapshot_reports_waiting_status() {
     let c = client();
     let chat = create_idle_chat(&c).await;
-    let mut events = Box::pin(c.stream_chat(chat, None).await.unwrap());
+    let mut events = c.stream_chat(chat, None).await.unwrap();
     let found = tokio::time::timeout(Duration::from_secs(10), async {
         while let Some(event) = events.next().await {
             let event = event.unwrap();
@@ -75,7 +75,7 @@ async fn stream_snapshot_reports_waiting_status() {
 #[ignore = "needs scripts/smoke.sh"]
 async fn watch_reports_created_chat() {
     let c = client();
-    let mut events = Box::pin(c.watch_chats().await.unwrap());
+    let mut events = c.watch_chats().await.unwrap();
     let chat = create_idle_chat(&c).await;
     let seen = tokio::time::timeout(Duration::from_secs(10), async {
         while let Some(event) = events.next().await {

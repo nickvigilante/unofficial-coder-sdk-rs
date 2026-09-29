@@ -1,5 +1,6 @@
 //! The chat stream and chat list WebSockets.
 
+use futures::stream::BoxStream;
 use futures::{Stream, StreamExt, stream};
 use reqwest_websocket::{Message, Upgrade};
 
@@ -79,22 +80,24 @@ impl Client {
         &self,
         chat: uuid::Uuid,
         after_id: Option<i64>,
-    ) -> Result<impl Stream<Item = Result<StreamEvent>> + use<>> {
+    ) -> Result<BoxStream<'static, Result<StreamEvent>>> {
         let mut path = format!("/api/v2/chats/{chat}/stream");
         if let Some(id) = after_id {
             path.push_str(&format!("?after_id={id}"));
         }
         let socket = self.open(&path).await?;
-        Ok(frames(socket).flat_map(|frame| {
-            let items: Vec<Result<StreamEvent>> = match frame {
-                Ok(text) => match serde_json::from_str::<Vec<serde_json::Value>>(&text) {
-                    Ok(values) => values.into_iter().map(|v| Ok(stream_event(v))).collect(),
-                    Err(e) => vec![Err(Error::Decode(e.to_string()))],
-                },
-                Err(e) => vec![Err(e)],
-            };
-            stream::iter(items)
-        }))
+        Ok(frames(socket)
+            .flat_map(|frame| {
+                let items: Vec<Result<StreamEvent>> = match frame {
+                    Ok(text) => match serde_json::from_str::<Vec<serde_json::Value>>(&text) {
+                        Ok(values) => values.into_iter().map(|v| Ok(stream_event(v))).collect(),
+                        Err(e) => vec![Err(Error::Decode(e.to_string()))],
+                    },
+                    Err(e) => vec![Err(e)],
+                };
+                stream::iter(items)
+            })
+            .boxed())
     }
 
     /// Streams chat list changes for the signed-in user, one event per frame.
@@ -108,14 +111,16 @@ impl Client {
     /// `Error::StreamClosed` item, when the stream yields one, is always the last item. Callers
     /// must poll the stream continuously (not pause between items) so the server's pings are
     /// answered; the server closes with code 1001 after about 30 seconds without a pong.
-    pub async fn watch_chats(&self) -> Result<impl Stream<Item = Result<WatchEvent>> + use<>> {
+    pub async fn watch_chats(&self) -> Result<BoxStream<'static, Result<WatchEvent>>> {
         let socket = self.open("/api/v2/chats/watch").await?;
-        Ok(frames(socket).map(|frame| {
-            let text = frame?;
-            let raw: serde_json::Value =
-                serde_json::from_str(&text).map_err(|e| Error::Decode(e.to_string()))?;
-            Ok(watch_event(raw))
-        }))
+        Ok(frames(socket)
+            .map(|frame| {
+                let text = frame?;
+                let raw: serde_json::Value =
+                    serde_json::from_str(&text).map_err(|e| Error::Decode(e.to_string()))?;
+                Ok(watch_event(raw))
+            })
+            .boxed())
     }
 }
 
