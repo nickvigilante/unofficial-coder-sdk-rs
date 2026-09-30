@@ -98,7 +98,9 @@ impl Client {
             return Err(Error::Unauthorized);
         }
         if status != 101 {
-            return Err(Error::from_status(status, b""));
+            // The body holds the server's message, such as why a chat cannot be watched.
+            let body = response.into_inner().bytes().await.unwrap_or_default();
+            return Err(Error::from_status(status, &body));
         }
         response
             .into_websocket()
@@ -175,6 +177,27 @@ impl Client {
                 let raw: serde_json::Value =
                     serde_json::from_str(&text).map_err(|e| Error::Decode(e.to_string()))?;
                 Ok(watch_event(raw))
+            })
+            .boxed())
+    }
+
+    /// Streams the workspace git state of `chat`: one message per frame. A `changes` message
+    /// is a delta keyed by `repo_root`, and a repository with `removed` set is gone. The server
+    /// answers `400` with a fixed message when the chat has no workspace or agent to watch,
+    /// which arrives as `Error::Api`. Like `watch_chats`, it ends with `Error::StreamClosed`
+    /// after [`STREAM_IDLE_TIMEOUT`] of silence, and there is no cursor to resume from.
+    pub async fn watch_chat_git(
+        &self,
+        chat: uuid::Uuid,
+    ) -> Result<BoxStream<'static, Result<crate::types::CodersdkWorkspaceAgentGitServerMessage>>>
+    {
+        let socket = self
+            .open(&format!("/api/v2/chats/{chat}/stream/git"))
+            .await?;
+        Ok(frames(socket, STREAM_IDLE_TIMEOUT)
+            .map(|frame| {
+                let text = frame?;
+                serde_json::from_str(&text).map_err(|e| Error::Decode(e.to_string()))
             })
             .boxed())
     }
@@ -365,5 +388,106 @@ mod tests {
         .await
         .unwrap();
         assert!(events.is_empty(), "{events:?}");
+    }
+
+    #[tokio::test]
+    async fn a_refused_upgrade_reports_the_servers_message() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let server = MockServer::start().await;
+        let chat = uuid::Uuid::new_v4();
+        Mock::given(method("GET"))
+            .and(path(format!("/api/v2/chats/{chat}/stream/git")))
+            .respond_with(
+                ResponseTemplate::new(400).set_body_json(
+                    serde_json::json!({"message": "Chat has no workspace to watch."}),
+                ),
+            )
+            .mount(&server)
+            .await;
+        let client = Client::new(&Session {
+            url: server.uri().parse().unwrap(),
+            token: SecretString::from("test-token-not-real"),
+        })
+        .unwrap();
+        match client.watch_chat_git(chat).await {
+            Err(Error::Api {
+                status: 400,
+                message,
+                ..
+            }) => assert_eq!(message, "Chat has no workspace to watch."),
+            Err(e) => panic!("expected the server's message, got {e:?}"),
+            Ok(_) => panic!("expected an error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn the_git_watch_yields_typed_messages() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut ws = tokio_tungstenite::accept_async(tcp).await.unwrap();
+            let frame = serde_json::json!({
+                "type": "changes",
+                "repositories": [{"repo_root": "/home/coder/scuttle", "branch": "m2",
+                    "remote_origin": "https://github.com/x/scuttle", "unified_diff": "diff --git a/x b/x\n"}]
+            });
+            ws.send(Message::text(frame.to_string())).await.unwrap();
+            ws.close(Some(CloseFrame {
+                code: CloseCode::Normal,
+                reason: "".into(),
+            }))
+            .await
+            .unwrap();
+            while ws.next().await.is_some() {}
+        });
+        let events: Vec<_> = tokio::time::timeout(
+            Duration::from_secs(10),
+            client(addr)
+                .watch_chat_git(uuid::Uuid::new_v4())
+                .await
+                .unwrap()
+                .collect(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(events.len(), 1, "{events:?}");
+        let msg = events[0].as_ref().unwrap();
+        assert_eq!(msg.type_.as_ref().map(|t| t.0.as_str()), Some("changes"));
+        assert_eq!(msg.repositories[0].branch.as_deref(), Some("m2"));
+    }
+
+    #[tokio::test]
+    async fn a_refused_upgrades_error_names_the_message_but_not_the_token() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let server = MockServer::start().await;
+        let chat = uuid::Uuid::new_v4();
+        Mock::given(method("GET"))
+            .and(path(format!("/api/v2/chats/{chat}/stream/git")))
+            .respond_with(
+                ResponseTemplate::new(400).set_body_json(
+                    serde_json::json!({"message": "Chat has no workspace to watch."}),
+                ),
+            )
+            .mount(&server)
+            .await;
+        let secret_token = "s3cr3t-session-token-do-not-leak";
+        let client = Client::new(&Session {
+            url: server.uri().parse().unwrap(),
+            token: SecretString::from(secret_token),
+        })
+        .unwrap();
+        let err = match client.watch_chat_git(chat).await {
+            Err(e) => e,
+            Ok(_) => panic!("expected an error"),
+        };
+        let rendered = format!("{err} {err:?}");
+        assert!(
+            rendered.contains("Chat has no workspace to watch."),
+            "{rendered}"
+        );
+        assert!(!rendered.contains(secret_token), "{rendered}");
     }
 }
