@@ -40,6 +40,20 @@ fn stream_event(raw: serde_json::Value) -> StreamEvent {
 /// even if the local socket never learned it (for example, after the laptop slept).
 pub const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(45);
 
+/// How long a WebSocket upgrade may take once the TCP connection is up. The connect timeout
+/// alone lets a server that accepts the connection but never answers hang the caller forever.
+pub const UPGRADE_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// `d` as people say it: whole seconds as seconds, anything else in milliseconds.
+pub(crate) fn describe(d: Duration) -> String {
+    if d.subsec_nanos() == 0 && d.as_secs() > 0 {
+        let secs = d.as_secs();
+        format!("{secs} second{}", if secs == 1 { "" } else { "s" })
+    } else {
+        format!("{} ms", d.as_millis())
+    }
+}
+
 fn watch_event(raw: serde_json::Value) -> WatchEvent {
     let kind = raw["kind"].as_str().unwrap_or_default().to_owned();
     let event = serde_json::from_value(raw.clone()).ok();
@@ -48,6 +62,26 @@ fn watch_event(raw: serde_json::Value) -> WatchEvent {
 
 impl Client {
     async fn open(&self, path_and_query: &str) -> Result<reqwest_websocket::WebSocket> {
+        self.open_within(path_and_query, UPGRADE_TIMEOUT).await
+    }
+
+    /// Opens a WebSocket, failing with `Error::Transport` when the upgrade takes longer than
+    /// `limit`.
+    pub(crate) async fn open_within(
+        &self,
+        path_and_query: &str,
+        limit: Duration,
+    ) -> Result<reqwest_websocket::WebSocket> {
+        match tokio::time::timeout(limit, self.upgrade(path_and_query)).await {
+            Ok(result) => result,
+            Err(_) => Err(Error::Transport(format!(
+                "the WebSocket upgrade took longer than {}",
+                describe(limit)
+            ))),
+        }
+    }
+
+    async fn upgrade(&self, path_and_query: &str) -> Result<reqwest_websocket::WebSocket> {
         let url = self
             .base_url()
             .join(path_and_query)
@@ -164,7 +198,7 @@ fn frames(
                 return Some((
                     Err(Error::StreamClosed {
                         code: None,
-                        reason: format!("no frame received for {} seconds", idle.as_secs()),
+                        reason: format!("no frame received for {}", describe(idle)),
                     }),
                     None,
                 ));
@@ -257,10 +291,43 @@ mod tests {
         .expect("the idle watchdog must end the stream");
         drop(hold_tx);
         assert_eq!(events.len(), 1);
-        assert!(matches!(
-            events[0],
-            Err(Error::StreamClosed { code: None, .. })
-        ));
+        match &events[0] {
+            Err(Error::StreamClosed { code: None, reason }) => {
+                assert_eq!(reason, "no frame received for 200 ms");
+            }
+            other => panic!("expected StreamClosed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn durations_read_naturally() {
+        assert_eq!(super::describe(Duration::from_millis(200)), "200 ms");
+        assert_eq!(super::describe(Duration::from_secs(1)), "1 second");
+        assert_eq!(super::describe(Duration::from_secs(45)), "45 seconds");
+        assert_eq!(super::describe(Duration::from_millis(1500)), "1500 ms");
+    }
+
+    #[tokio::test]
+    async fn a_hung_upgrade_fails_after_the_upgrade_timeout() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (hold_tx, hold_rx) = tokio::sync::oneshot::channel::<()>();
+        tokio::spawn(async move {
+            // Accept the TCP connection and never answer the upgrade request.
+            let (_tcp, _) = listener.accept().await.unwrap();
+            let _ = hold_rx.await;
+        });
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            client(addr).open_within("/api/v2/chats/watch", Duration::from_millis(200)),
+        )
+        .await
+        .expect("the upgrade timeout must fire before the test ceiling");
+        drop(hold_tx);
+        match result {
+            Err(Error::Transport(reason)) => assert!(reason.contains("200 ms"), "{reason}"),
+            other => panic!("expected a transport error, got {:?}", other.map(|_| ())),
+        }
     }
 
     #[tokio::test]
