@@ -544,7 +544,15 @@ mod tests {
         })
         .unwrap();
         match client.watch_chat_git(chat).await {
-            Err(Error::Api { status: 400, .. }) => {}
+            // Truncating at MAX_REFUSAL_BODY cuts the JSON mid-string, so parsing it fails
+            // and the message falls back to the generic "HTTP 400": proof the read actually
+            // stopped at the cap rather than buffering the full, well-formed body (which would
+            // parse and carry the real, oversized message through instead).
+            Err(Error::Api {
+                status: 400,
+                message,
+                ..
+            }) => assert_eq!(message, "HTTP 400"),
             Err(e) => panic!("expected an Api error, got {e:?}"),
             Ok(_) => panic!("expected an error"),
         }
