@@ -1,6 +1,7 @@
 //! Unofficial hand-written layer over the generated Coder API client.
 
 mod client;
+mod debug;
 mod enums;
 mod error;
 pub mod session;
@@ -8,6 +9,7 @@ mod stream;
 
 pub use client::{Client, Session};
 pub use coder_api_gen::types;
+pub use debug::McpConnectOutcome;
 pub use enums::{ChatStatus, PartType, StreamEventType};
 pub use error::{Error, Result, Validation};
 pub use session::discover_session;
