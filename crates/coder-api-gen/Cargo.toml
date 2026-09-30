@@ -2,6 +2,7 @@
 name = "coder-api-gen"
 version = "0.0.0"
 edition.workspace = true
+license.workspace = true
 publish.workspace = true
 description = "Unofficial generated client for the Coder API. Not supported by Coder."
 

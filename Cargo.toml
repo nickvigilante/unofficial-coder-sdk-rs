@@ -4,6 +4,7 @@ members = ["crates/coder-api-gen", "crates/coder-sdk", "xtask"]
 
 [workspace.package]
 edition = "2024"
+license = "MIT"
 publish = false
 repository = "https://github.com/nickvigilante/unofficial-coder-sdk-rs"
 

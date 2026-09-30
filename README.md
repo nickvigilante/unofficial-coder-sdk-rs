@@ -15,3 +15,8 @@ It exists to support scuttle, a personal terminal client for Coder Agents.
 
 Run `scripts/regenerate.sh <coder-ref-or-path>` with a coder/coder tag, branch, commit, or local checkout path.
 The script records what it applied in `spec/patches.log` and the source commit in `spec/coder-ref.txt`.
+
+## License
+
+The code in this repository is licensed under the MIT License; see `LICENSE`.
+The API specification files under `spec/` come from coder/coder and remain under its AGPL-3.0 license; see `NOTICE`.
