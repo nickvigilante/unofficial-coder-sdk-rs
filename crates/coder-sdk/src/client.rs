@@ -62,6 +62,9 @@ pub struct Client {
     /// `http1_only()` for the same reason.
     ws_http: reqwest::Client,
     api: coder_api_gen::Client,
+    /// Kept only to redact the token out of a server response that echoes it back, such as a
+    /// refused WebSocket upgrade; never logged, printed, or otherwise rendered.
+    token: SecretString,
 }
 
 impl Client {
@@ -99,6 +102,7 @@ impl Client {
             http,
             ws_http,
             api,
+            token: session.token.clone(),
         })
     }
 
@@ -115,6 +119,13 @@ impl Client {
     /// The HTTP/1.1-only client used for WebSocket upgrades.
     pub(crate) fn ws_http(&self) -> &reqwest::Client {
         &self.ws_http
+    }
+
+    /// Replaces every occurrence of the session token in `text` with `[redacted]`. Defends
+    /// against a server response that echoes the token back, such as an auth failure message
+    /// on a refused WebSocket upgrade.
+    pub(crate) fn redact_token(&self, text: &str) -> String {
+        text.replace(self.token.expose_secret(), "[redacted]")
     }
 
     /// The deployment URL.

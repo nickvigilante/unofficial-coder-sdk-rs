@@ -44,6 +44,24 @@ pub const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(45);
 /// alone lets a server that accepts the connection but never answers hang the caller forever.
 pub const UPGRADE_TIMEOUT: Duration = Duration::from_secs(15);
 
+/// The most of a refused upgrade's body we read before giving up. The body is only ever a
+/// short JSON error message, so a large or endless response cannot be let exhaust memory.
+const MAX_REFUSAL_BODY: usize = 64 * 1024;
+
+/// Reads at most `limit` bytes of `response`'s body, stopping as soon as the cap is reached
+/// rather than buffering the whole thing.
+async fn capped_body(mut response: reqwest::Response, limit: usize) -> Vec<u8> {
+    let mut body = Vec::new();
+    while body.len() < limit {
+        match response.chunk().await {
+            Ok(Some(chunk)) => body.extend_from_slice(&chunk),
+            _ => break,
+        }
+    }
+    body.truncate(limit);
+    body
+}
+
 /// `d` as people say it: whole seconds as seconds, anything else in milliseconds.
 pub(crate) fn describe(d: Duration) -> String {
     if d.subsec_nanos() == 0 && d.as_secs() > 0 {
@@ -99,8 +117,24 @@ impl Client {
         }
         if status != 101 {
             // The body holds the server's message, such as why a chat cannot be watched.
-            let body = response.into_inner().bytes().await.unwrap_or_default();
-            return Err(Error::from_status(status, &body));
+            let body = capped_body(response.into_inner(), MAX_REFUSAL_BODY).await;
+            let mut err = Error::from_status(status, &body);
+            if let Error::Api {
+                message,
+                detail,
+                validations,
+                ..
+            } = &mut err
+            {
+                *message = self.redact_token(message);
+                if let Some(detail) = detail {
+                    *detail = self.redact_token(detail);
+                }
+                for validation in validations.iter_mut() {
+                    validation.detail = self.redact_token(&validation.detail);
+                }
+            }
+            return Err(err);
         }
         response
             .into_websocket()
@@ -464,16 +498,14 @@ mod tests {
         use wiremock::{Mock, MockServer, ResponseTemplate};
         let server = MockServer::start().await;
         let chat = uuid::Uuid::new_v4();
+        let secret_token = "s3cr3t-session-token-do-not-leak";
         Mock::given(method("GET"))
             .and(path(format!("/api/v2/chats/{chat}/stream/git")))
-            .respond_with(
-                ResponseTemplate::new(400).set_body_json(
-                    serde_json::json!({"message": "Chat has no workspace to watch."}),
-                ),
-            )
+            .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+                "message": format!("bad token {secret_token}"),
+            })))
             .mount(&server)
             .await;
-        let secret_token = "s3cr3t-session-token-do-not-leak";
         let client = Client::new(&Session {
             url: server.uri().parse().unwrap(),
             token: SecretString::from(secret_token),
@@ -484,10 +516,37 @@ mod tests {
             Ok(_) => panic!("expected an error"),
         };
         let rendered = format!("{err} {err:?}");
-        assert!(
-            rendered.contains("Chat has no workspace to watch."),
-            "{rendered}"
-        );
+        assert!(rendered.contains("[redacted]"), "{rendered}");
         assert!(!rendered.contains(secret_token), "{rendered}");
+    }
+
+    #[tokio::test]
+    async fn a_refusal_body_over_the_cap_still_yields_an_error() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let server = MockServer::start().await;
+        let chat = uuid::Uuid::new_v4();
+        // Larger than MAX_REFUSAL_BODY (64 KiB), and not valid JSON once truncated, so a
+        // correct cap falls back to the generic "HTTP 400" message instead of hanging or
+        // buffering the whole body.
+        let oversized = serde_json::json!({
+            "message": "x".repeat(100 * 1024),
+        })
+        .to_string();
+        Mock::given(method("GET"))
+            .and(path(format!("/api/v2/chats/{chat}/stream/git")))
+            .respond_with(ResponseTemplate::new(400).set_body_raw(oversized, "application/json"))
+            .mount(&server)
+            .await;
+        let client = Client::new(&Session {
+            url: server.uri().parse().unwrap(),
+            token: SecretString::from("test-token-not-real"),
+        })
+        .unwrap();
+        match client.watch_chat_git(chat).await {
+            Err(Error::Api { status: 400, .. }) => {}
+            Err(e) => panic!("expected an Api error, got {e:?}"),
+            Ok(_) => panic!("expected an error"),
+        }
     }
 }
