@@ -18,5 +18,6 @@ The script records what it applied in `spec/patches.log` and the source commit i
 
 ## License
 
-The code in this repository is licensed under the MIT License; see `LICENSE`.
-The API specification files under `spec/` come from coder/coder and remain under its AGPL-3.0 license; see `NOTICE`.
+Copyright (c) 2026 Nick Vigilante.
+This repository is licensed under the GNU Affero General Public License v3.0 only; see `LICENSE`.
+The API specification under `spec/` comes from coder/coder, which uses the same license, and `crates/coder-api-gen` is generated from it; see `NOTICE`.

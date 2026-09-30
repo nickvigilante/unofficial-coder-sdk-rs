@@ -1,5 +1,9 @@
-The files under spec/ are copied or derived from the API specification in
-coder/coder (https://github.com/coder/coder), which is licensed under the
-GNU Affero General Public License v3.0. They remain under that license.
+unofficial-coder-sdk-rs
+Copyright (c) 2026 Nick Vigilante
 
-The rest of this repository is licensed under the MIT License in LICENSE.
+This repository is licensed under the GNU Affero General Public License v3.0
+only (AGPL-3.0-only); see LICENSE.
+
+The files under spec/ are copied or derived from the API specification in
+coder/coder (https://github.com/coder/coder), which is also licensed under
+the AGPL-3.0, and crates/coder-api-gen is generated from them.
