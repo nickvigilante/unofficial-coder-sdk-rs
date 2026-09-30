@@ -4,6 +4,7 @@ mod client;
 mod debug;
 mod enums;
 mod error;
+mod messages;
 pub mod session;
 mod stream;
 
