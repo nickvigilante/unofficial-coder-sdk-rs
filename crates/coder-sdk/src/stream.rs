@@ -118,23 +118,7 @@ impl Client {
         if status != 101 {
             // The body holds the server's message, such as why a chat cannot be watched.
             let body = capped_body(response.into_inner(), MAX_REFUSAL_BODY).await;
-            let mut err = Error::from_status(status, &body);
-            if let Error::Api {
-                message,
-                detail,
-                validations,
-                ..
-            } = &mut err
-            {
-                *message = self.redact_token(message);
-                if let Some(detail) = detail {
-                    *detail = self.redact_token(detail);
-                }
-                for validation in validations.iter_mut() {
-                    validation.detail = self.redact_token(&validation.detail);
-                }
-            }
-            return Err(err);
+            return Err(self.error_from_status(status, &body));
         }
         response
             .into_websocket()

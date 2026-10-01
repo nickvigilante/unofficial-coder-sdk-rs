@@ -128,6 +128,29 @@ impl Client {
         text.replace(self.token.expose_secret(), "[redacted]")
     }
 
+    /// [`Error::from_status`] for a response to a request this client sent by hand, with the
+    /// session token redacted from the message, the detail, and every validation, in case the
+    /// server or a proxy echoes it back.
+    pub(crate) fn error_from_status(&self, status: u16, body: &[u8]) -> Error {
+        let mut err = Error::from_status(status, body);
+        if let Error::Api {
+            message,
+            detail,
+            validations,
+            ..
+        } = &mut err
+        {
+            *message = self.redact_token(message);
+            if let Some(detail) = detail {
+                *detail = self.redact_token(detail);
+            }
+            for validation in validations.iter_mut() {
+                validation.detail = self.redact_token(&validation.detail);
+            }
+        }
+        err
+    }
+
     /// The deployment URL.
     pub fn base_url(&self) -> &Url {
         &self.base

@@ -15,7 +15,8 @@ use crate::{Client, Error, Result};
 impl Client {
     /// Sends `body` to `chat` like the generated `send_chat_message`, but always sends
     /// `mcp_server_ids`, so an empty slice turns every MCP server off for the chat instead of
-    /// leaving the selection unchanged.
+    /// leaving the selection unchanged. `body.mcp_server_ids` is ignored: the
+    /// `mcp_server_ids` argument always replaces it.
     pub async fn send_chat_message_with_mcp_servers(
         &self,
         chat: uuid::Uuid,
@@ -34,7 +35,7 @@ impl Client {
             return Ok(());
         }
         let bytes = response.bytes().await?;
-        Err(Error::from_status(status, &bytes))
+        Err(self.error_from_status(status, &bytes))
     }
 }
 
@@ -140,5 +141,33 @@ mod tests {
             .send_chat_message_with_mcp_servers(chat, &body, &[github, linear])
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_refusal_names_the_message_but_not_the_token() {
+        let server = MockServer::start().await;
+        let chat = uuid::Uuid::new_v4();
+        let secret_token = "s3cr3t-session-token-do-not-leak";
+        Mock::given(method("POST"))
+            .and(path(format!("/api/v2/chats/{chat}/messages")))
+            .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+                "message": format!("bad token {secret_token}"),
+                "detail": format!("echoed {secret_token}"),
+                "validations": [{"field": "token", "detail": format!("got {secret_token}")}],
+            })))
+            .mount(&server)
+            .await;
+        let client = Client::new(&Session {
+            url: server.uri().parse().unwrap(),
+            token: SecretString::from(secret_token),
+        })
+        .unwrap();
+        let err = client
+            .send_chat_message_with_mcp_servers(chat, &text_body("hi"), &[])
+            .await
+            .unwrap_err();
+        let rendered = format!("{err} {err:?}");
+        assert!(rendered.contains("[redacted]"), "{rendered}");
+        assert!(!rendered.contains(secret_token), "{rendered}");
     }
 }

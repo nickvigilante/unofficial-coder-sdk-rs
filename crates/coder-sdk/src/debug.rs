@@ -41,7 +41,7 @@ impl Client {
         let status = response.status().as_u16();
         let body = response.bytes().await?;
         if status != 200 {
-            return Err(Error::from_status(status, &body));
+            return Err(self.error_from_status(status, &body));
         }
         let runs: Vec<RunSummary> =
             serde_json::from_slice(&body).map_err(|e| Error::Decode(e.to_string()))?;
@@ -139,5 +139,30 @@ mod tests {
             c.latest_mcp_connect(hidden).await,
             Err(Error::Api { status: 404, .. })
         ));
+    }
+
+    #[tokio::test]
+    async fn a_refusal_names_the_message_but_not_the_token() {
+        let server = MockServer::start().await;
+        let chat = uuid::Uuid::new_v4();
+        let secret_token = "s3cr3t-session-token-do-not-leak";
+        Mock::given(method("GET"))
+            .and(path(format!("/api/experimental/chats/{chat}/debug/runs")))
+            .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+                "message": format!("bad token {secret_token}"),
+                "detail": format!("echoed {secret_token}"),
+                "validations": [{"field": "token", "detail": format!("got {secret_token}")}],
+            })))
+            .mount(&server)
+            .await;
+        let client = Client::new(&Session {
+            url: server.uri().parse().unwrap(),
+            token: SecretString::from(secret_token),
+        })
+        .unwrap();
+        let err = client.latest_mcp_connect(chat).await.unwrap_err();
+        let rendered = format!("{err} {err:?}");
+        assert!(rendered.contains("[redacted]"), "{rendered}");
+        assert!(!rendered.contains(secret_token), "{rendered}");
     }
 }
