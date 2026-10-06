@@ -1,0 +1,111 @@
+name: regenerate
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: coder/coder tag, branch, or full commit SHA (short SHAs cannot be fetched)
+        required: true
+  schedule:
+    - cron: "17 6 * * *"
+permissions: {}
+concurrency:
+  group: regenerate
+  cancel-in-progress: false
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: rustup toolchain install
+      - name: Pick the ref
+        id: ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_REF: ${{ inputs.ref }}
+        run: |
+          if [ -n "$INPUT_REF" ]; then
+            echo "ref=$INPUT_REF" >> "$GITHUB_OUTPUT"
+          else
+            latest="$(gh api repos/coder/coder/releases/latest --jq .tag_name)"
+            current="$(cut -d' ' -f1 < spec/coder-ref.txt)"
+            if [ "$latest" = "$current" ]; then
+              echo "Already at $latest"
+              echo "ref=" >> "$GITHUB_OUTPUT"
+            else
+              echo "ref=$latest" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+      - name: Regenerate
+        if: steps.ref.outputs.ref != ''
+        env:
+          REF: ${{ steps.ref.outputs.ref }}
+        run: |
+          cut -f1 spec/patches.log | sort | uniq -c > /tmp/rules-before.txt
+          scripts/regenerate.sh "$REF"
+          cut -f1 spec/patches.log | sort | uniq -c > /tmp/rules-after.txt
+          cargo fmt --all --check
+          cargo clippy --workspace --exclude coder-api-gen --all-targets -- -D warnings
+          cargo test --workspace
+          scripts/smoke.sh
+      - name: Open a pull request
+        if: steps.ref.outputs.ref != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ steps.ref.outputs.ref }}
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes"
+            exit 0
+          fi
+          branch="regenerate-$(printf '%s' "$REF" | tr -c 'A-Za-z0-9' '-' | tr -s '-')"
+          git check-ref-format --branch "$branch" >/dev/null || { echo "cannot derive a valid branch name from $REF"; exit 1; }
+          title="feat: regenerate coder-api-gen from coder/coder $REF"
+          {
+            echo "## Summary"
+            echo
+            echo "Regenerates coder-api-gen from coder/coder \`$(cat spec/coder-ref.txt)\`."
+            echo
+            echo "## Patch rules"
+            echo
+            echo "Before:"
+            echo '```text'
+            cat /tmp/rules-before.txt
+            echo '```'
+            echo "After:"
+            echo '```text'
+            cat /tmp/rules-after.txt
+            echo '```'
+            if ! diff -q /tmp/rules-before.txt /tmp/rules-after.txt >/dev/null; then
+              echo
+              echo "**The set or count of patch rules changed. Review spec/patches.log.**"
+            fi
+            echo
+            echo "---"
+            echo "🤖 Built with AI assistance."
+          } > /tmp/body.md
+          open_count="$(gh pr list --head "$branch" --state open --json number --jq length)"
+          if [ "$open_count" -ne 0 ]; then
+            echo "A pull request for $branch is already open"
+            exit 0
+          fi
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            echo "Branch $branch already exists without an open PR; retrying PR creation"
+            gh pr create --head "$branch" --title "$title" --body-file /tmp/body.md
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add -A
+          git commit -m "$title" -m "Assisted-by: AI"
+          git push -u origin "$branch"
+          gh pr create --head "$branch" --title "$title" --body-file /tmp/body.md

@@ -1,0 +1,23 @@
+# unofficial-coder-sdk-rs
+
+This is an unofficial Rust SDK for the Coder API, and it is not built, supported, or endorsed by Coder.
+
+It exists to support scuttle, a personal terminal client for Coder Agents.
+
+## Layout
+
+- `crates/coder-api-gen` is generated from coder/coder's Swagger spec by progenitor and is never edited by hand.
+- `crates/coder-sdk` is the hand-written layer: session discovery, errors, and the chat WebSocket streams.
+- `xtask` runs the generator.
+- `tools` holds the raw-field lister and the spec patch script.
+
+## Regenerating
+
+Run `scripts/regenerate.sh <coder-ref-or-path>` with a coder/coder tag, branch, commit, or local checkout path.
+The script records what it applied in `spec/patches.log` and the source commit in `spec/coder-ref.txt`.
+
+## License
+
+Copyright (c) 2026 Nick Vigilante.
+This repository is licensed under the GNU Affero General Public License v3.0 only; see `LICENSE`.
+The API specification under `spec/` comes from coder/coder, which uses the same license, and `crates/coder-api-gen` is generated from it; see `NOTICE`.

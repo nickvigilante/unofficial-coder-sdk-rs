@@ -1,0 +1,251 @@
+//! Downloading a chat file, which the generated client cannot do: the server declares no
+//! body for `GET /api/v2/chats/files/{file}` (`@Success 200`, `coderd/exp_chats.go`,
+//! `chatFileByID`), so the generated `get_chat_file` returns `ResponseValue<()>` and drops the
+//! bytes. The download here sends the session token in its header, as every request does, and
+//! never uses the signed-URL endpoints, which put a token in the URL.
+
+use std::time::Duration;
+
+use reqwest::header::{CONTENT_DISPOSITION, CONTENT_TYPE, HeaderName};
+
+use crate::stream::{MAX_REFUSAL_BODY, capped_body};
+use crate::{Client, Error, Result};
+
+/// How long a download may take, from connecting to its last byte. The shared client's 60
+/// second total covers the body too, which a 10 MiB file on a link slower than about
+/// 170 KiB/s would outlast, so a download sets its own.
+pub(crate) const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
+/// A chat file on its way, read a chunk at a time so the caller can write each piece out
+/// rather than hold the whole file.
+#[derive(Debug)]
+pub struct ChatFileDownload {
+    /// The stored media type, from `Content-Type`.
+    pub media_type: Option<String>,
+    /// The stored name, from `Content-Disposition`. A person or a model chose it, so it is
+    /// not safe to use as a path.
+    pub file_name: Option<String>,
+    /// The body's length, from `Content-Length`, when the server sent one.
+    pub size: Option<u64>,
+    response: reqwest::Response,
+}
+
+impl ChatFileDownload {
+    /// The next piece of the body, or `None` at its end.
+    pub async fn chunk(&mut self) -> Result<Option<Vec<u8>>> {
+        Ok(self.response.chunk().await?.map(|bytes| bytes.to_vec()))
+    }
+}
+
+/// The value of header `name` in `response`, when it is text.
+fn header(response: &reqwest::Response, name: HeaderName) -> Option<String> {
+    response
+        .headers()
+        .get(name)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned)
+}
+
+/// The `filename` parameter of a `Content-Disposition` value, quoted (with `\` escapes, as
+/// Go's `mime.FormatMediaType` writes it) or bare. `None` when it is missing, empty, or cut
+/// off, or when only the extended `filename*` form is present.
+pub(crate) fn disposition_name(value: &str) -> Option<String> {
+    const KEY: &str = "filename=";
+    // Lowercasing changes only ASCII letters, so byte offsets stay the same in `value`.
+    let lower = value.to_ascii_lowercase();
+    let start = lower
+        .match_indices(KEY)
+        .map(|(i, _)| i)
+        .find(|&i| i == 0 || matches!(lower.as_bytes()[i - 1], b';' | b' ' | b'\t'))?;
+    let rest = &value[start + KEY.len()..];
+    let name = match rest.strip_prefix('"') {
+        Some(quoted) => {
+            let mut name = String::new();
+            let mut chars = quoted.chars();
+            loop {
+                match chars.next()? {
+                    '"' => break,
+                    '\\' => name.push(chars.next()?),
+                    c => name.push(c),
+                }
+            }
+            name
+        }
+        None => rest.split(';').next().unwrap_or_default().trim().to_owned(),
+    };
+    (!name.is_empty()).then_some(name)
+}
+
+impl Client {
+    /// The request `download_chat_file` sends: a `GET` with its own `DOWNLOAD_TIMEOUT`, which
+    /// overrides the shared client's total for this request only.
+    fn download_request(&self, file: uuid::Uuid) -> Result<reqwest::Request> {
+        let url = self
+            .base_url()
+            .join(&format!("/api/v2/chats/files/{file}"))
+            .map_err(|e| Error::Transport(e.to_string()))?;
+        Ok(self.http().get(url).timeout(DOWNLOAD_TIMEOUT).build()?)
+    }
+
+    /// Starts downloading chat file `file`. The session token goes only in the request's
+    /// header, which the shared client adds. A refusal's text has the token redacted, as every
+    /// hand-built request's does, and its body is read only up to a small cap.
+    pub async fn download_chat_file(&self, file: uuid::Uuid) -> Result<ChatFileDownload> {
+        let request = self.download_request(file)?;
+        let response = self.http().execute(request).await?;
+        let status = response.status().as_u16();
+        if status != 200 {
+            let body = capped_body(response, MAX_REFUSAL_BODY).await;
+            return Err(self.error_from_status(status, &body));
+        }
+        let media_type = header(&response, CONTENT_TYPE);
+        let file_name = header(&response, CONTENT_DISPOSITION)
+            .as_deref()
+            .and_then(disposition_name);
+        let size = response.content_length();
+        Ok(ChatFileDownload {
+            media_type,
+            file_name,
+            size,
+            response,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use secrecy::SecretString;
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    use super::{DOWNLOAD_TIMEOUT, disposition_name};
+    use crate::{Client, Error, Session};
+
+    const TOKEN: &str = "s3cr3t-session-token-do-not-leak";
+
+    fn client(url: &str) -> Client {
+        Client::new(&Session {
+            url: url.parse().unwrap(),
+            token: SecretString::from(TOKEN),
+        })
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_file_downloads_in_chunks_with_the_token_only_in_a_header() {
+        let server = MockServer::start().await;
+        let file = uuid::Uuid::new_v4();
+        let body: Vec<u8> = (0..200_000u32).map(|i| (i % 251) as u8).collect();
+        Mock::given(method("GET"))
+            .and(path(format!("/api/v2/chats/files/{file}")))
+            .and(header("Coder-Session-Token", TOKEN))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_bytes(body.clone())
+                    .insert_header("content-type", "application/zip")
+                    .insert_header(
+                        "content-disposition",
+                        "attachment; filename=\"build; logs.zip\"",
+                    ),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        let mut download = client(&server.uri())
+            .download_chat_file(file)
+            .await
+            .unwrap();
+        assert_eq!(download.media_type.as_deref(), Some("application/zip"));
+        assert_eq!(download.file_name.as_deref(), Some("build; logs.zip"));
+        assert_eq!(download.size, Some(body.len() as u64));
+        let mut got = Vec::new();
+        while let Some(chunk) = download.chunk().await.unwrap() {
+            got.extend_from_slice(&chunk);
+        }
+        assert_eq!(got, body);
+        let requests = server.received_requests().await.unwrap();
+        assert_eq!(requests[0].url.query(), None, "nothing rides in the URL");
+        assert!(!requests[0].url.as_str().contains(TOKEN));
+    }
+
+    #[tokio::test]
+    async fn a_missing_file_is_a_404_api_error() {
+        let server = MockServer::start().await;
+        let file = uuid::Uuid::new_v4();
+        Mock::given(path(format!("/api/v2/chats/files/{file}")))
+            .respond_with(
+                ResponseTemplate::new(404)
+                    .set_body_json(serde_json::json!({"message": "Resource not found."})),
+            )
+            .mount(&server)
+            .await;
+        match client(&server.uri()).download_chat_file(file).await {
+            Err(Error::Api {
+                status, message, ..
+            }) => {
+                assert_eq!(status, 404);
+                assert_eq!(message, "Resource not found.");
+            }
+            other => panic!("expected a 404, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_refusal_redacts_the_token_and_a_rejected_token_is_unauthorized() {
+        let server = MockServer::start().await;
+        let (refused, rejected) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+        Mock::given(path(format!("/api/v2/chats/files/{refused}")))
+            .respond_with(ResponseTemplate::new(403).set_body_json(serde_json::json!({
+                "message": format!("bad token {TOKEN}"),
+                "detail": format!("echoed {TOKEN}"),
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(path(format!("/api/v2/chats/files/{rejected}")))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+        let c = client(&server.uri());
+        let err = c.download_chat_file(refused).await.unwrap_err();
+        let rendered = format!("{err} {err:?}");
+        assert!(rendered.contains("[redacted]"), "{rendered}");
+        assert!(!rendered.contains(TOKEN), "{rendered}");
+        assert!(matches!(
+            c.download_chat_file(rejected).await,
+            Err(Error::Unauthorized)
+        ));
+    }
+
+    #[test]
+    fn a_download_has_its_own_five_minute_timeout() {
+        let request = client("http://127.0.0.1:1")
+            .download_request(uuid::Uuid::nil())
+            .unwrap();
+        assert_eq!(DOWNLOAD_TIMEOUT, std::time::Duration::from_secs(300));
+        assert_eq!(
+            request.timeout(),
+            Some(&DOWNLOAD_TIMEOUT),
+            "the shared 60 second total would cut off a 10 MiB file on a slow link"
+        );
+    }
+
+    #[test]
+    fn the_disposition_name_is_read_quoted_or_bare() {
+        assert_eq!(
+            disposition_name("inline; filename=\"a \\\"b\\\" c.png\"").as_deref(),
+            Some("a \"b\" c.png")
+        );
+        assert_eq!(
+            disposition_name("attachment; FILENAME=notes.txt; size=3").as_deref(),
+            Some("notes.txt")
+        );
+        assert_eq!(
+            disposition_name("attachment; filename*=utf-8''caf%C3%A9.txt"),
+            None,
+            "the extended form is left to the chat's own record"
+        );
+        assert_eq!(disposition_name("inline"), None);
+        assert_eq!(disposition_name("inline; filename=\"\""), None);
+        assert_eq!(disposition_name("inline; filename=\"cut"), None);
+    }
+}

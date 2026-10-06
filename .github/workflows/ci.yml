@@ -1,0 +1,22 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - run: rustup toolchain install
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --exclude coder-api-gen --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - run: cd tools/rawfields && go test ./...
+      - run: cd tools && python3 -m unittest test_patch_spec -v
