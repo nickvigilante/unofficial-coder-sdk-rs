@@ -6,6 +6,7 @@ mod enums;
 mod error;
 mod files;
 mod messages;
+mod provider_keys;
 pub mod session;
 mod stream;
 
@@ -15,6 +16,7 @@ pub use debug::McpConnectOutcome;
 pub use enums::{ChatStatus, PartType, StreamEventType};
 pub use error::{Error, Result, Validation};
 pub use files::ChatFileDownload;
+pub use provider_keys::ProviderKeyStatus;
 pub use session::discover_session;
 pub use stream::{STREAM_IDLE_TIMEOUT, StreamEvent, UPGRADE_TIMEOUT, WatchEvent};
 

@@ -20,6 +20,8 @@ thiserror.workspace = true
 tokio.workspace = true
 url.workspace = true
 uuid.workspace = true
+# Holds a provider key's request body, so it is wiped when the request is built.
+zeroize.workspace = true
 
 [dev-dependencies]
 tokio-tungstenite.workspace = true
