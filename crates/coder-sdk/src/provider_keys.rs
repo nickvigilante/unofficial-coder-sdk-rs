@@ -18,13 +18,19 @@ use crate::{Client, Error, Result};
 /// and whether the deployment accepts personal keys at all.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProviderKeyStatus {
+    /// The provider's ID, which the set and remove calls take.
     pub provider_id: uuid::Uuid,
+    /// The provider's name on the deployment.
     pub name: String,
+    /// The name to show the user, or `name` when the server sends none.
     pub display_name: String,
     /// `openai`, `anthropic`, and so on, as the server names the provider's type.
     pub provider_type: String,
+    /// Whether the deployment has turned this provider on.
     pub enabled: bool,
+    /// Whether the user has set their own key for this provider.
     pub has_user_key: bool,
+    /// Whether the deployment has its own key for this provider.
     pub has_deployment_key: bool,
     /// The deployment's `AllowBYOK`, repeated on every row.
     pub byok_enabled: bool,
@@ -73,10 +79,13 @@ impl From<WireRow> for ProviderKeyStatus {
     }
 }
 
-/// Whether a key may be sent to `url`: always over https, and over http only to this machine.
+/// Whether a key may be sent to `url`: over https, or over http only to this machine. Every
+/// other scheme is refused.
 pub(crate) fn sends_keys_to(url: &url::Url) -> bool {
-    if url.scheme() != "http" {
-        return true;
+    match url.scheme() {
+        "https" => return true,
+        "http" => {}
+        _ => return false,
     }
     match url.host() {
         Some(url::Host::Domain(d)) => d.eq_ignore_ascii_case("localhost"),
@@ -113,7 +122,9 @@ fn hide_key(err: Error, key: &str) -> Error {
         } => {
             let leaked = message.contains(key)
                 || detail.as_deref().is_some_and(|d| d.contains(key))
-                || validations.iter().any(|v| v.detail.contains(key));
+                || validations
+                    .iter()
+                    .any(|v| v.detail.contains(key) || v.field.contains(key));
             if leaked {
                 Error::Api {
                     status,
@@ -397,10 +408,106 @@ mod tests {
     fn the_body_reserves_room_for_the_worst_escape_up_front() {
         let body = super::key_body("ab\u{1}").unwrap();
         assert_eq!(&body[..], br#"{"api_key":"ab\u0001"}"#);
-        assert!(
-            body.capacity() >= 3 * 6 + 16,
-            "capacity {}",
-            body.capacity()
-        );
+        assert_eq!(body.capacity(), 3 * 6 + 16);
+    }
+
+    /// Sends a PUT that the mock server answers with `status` and `reply`, and returns the
+    /// error's Display and Debug text after checking the key and token are absent from it.
+    async fn shown_error(status: u16, reply: serde_json::Value) -> String {
+        let server = MockServer::start().await;
+        let id = uuid::Uuid::new_v4();
+        Mock::given(method("PUT"))
+            .and(path(format!("/api/v2/users/me/ai-provider-keys/{id}")))
+            .respond_with(ResponseTemplate::new(status).set_body_json(reply))
+            .mount(&server)
+            .await;
+        let err = client(&server.uri())
+            .set_provider_key(id, KEY)
+            .await
+            .unwrap_err();
+        let shown = format!("{err} {err:?}");
+        assert!(!shown.contains(KEY), "{shown}");
+        shown
+    }
+
+    #[tokio::test]
+    async fn a_message_that_echoes_the_key_is_hidden() {
+        let shown = shown_error(400, serde_json::json!({ "message": format!("bad {KEY}") })).await;
+        assert!(shown.contains("contained the key"), "{shown}");
+    }
+
+    #[tokio::test]
+    async fn a_detail_that_echoes_the_key_is_hidden() {
+        let shown = shown_error(
+            400,
+            serde_json::json!({ "message": "bad key", "detail": format!("got {KEY}") }),
+        )
+        .await;
+        assert!(shown.contains("contained the key"), "{shown}");
+    }
+
+    #[tokio::test]
+    async fn a_validation_detail_that_echoes_the_key_is_hidden() {
+        let shown = shown_error(
+            400,
+            serde_json::json!({
+                "message": "bad key",
+                "validations": [{ "field": "api_key", "detail": format!("got {KEY}") }],
+            }),
+        )
+        .await;
+        assert!(shown.contains("contained the key"), "{shown}");
+    }
+
+    #[tokio::test]
+    async fn a_validation_field_that_echoes_the_key_is_hidden() {
+        let shown = shown_error(
+            400,
+            serde_json::json!({
+                "message": "bad key",
+                "validations": [{ "field": KEY, "detail": "y" }],
+            }),
+        )
+        .await;
+        assert!(shown.contains("contained the key"), "{shown}");
+    }
+
+    #[tokio::test]
+    async fn a_reply_that_fails_to_decode_and_echoes_the_key_is_hidden() {
+        let shown = shown_error(200, serde_json::json!(KEY)).await;
+        assert!(shown.contains("could not decode"), "{shown}");
+        assert!(shown.contains("contained the key"), "{shown}");
+    }
+
+    #[test]
+    fn a_transport_or_timeout_error_that_echoes_the_key_is_hidden() {
+        for err in [
+            super::hide_key(Error::Transport(format!("sent {KEY}")), KEY),
+            super::hide_key(Error::Timeout(format!("sent {KEY}")), KEY),
+        ] {
+            let shown = format!("{err} {err:?}");
+            assert!(!shown.contains(KEY), "{shown}");
+            assert!(shown.contains("contained the key"), "{shown}");
+        }
+    }
+
+    #[test]
+    fn keys_go_only_over_https_or_http_to_this_machine() {
+        assert!(!super::sends_keys_to(&"ws://evil.com".parse().unwrap()));
+        assert!(!super::sends_keys_to(&"ftp://evil.com".parse().unwrap()));
+    }
+
+    #[test]
+    fn a_non_loopback_ipv6_host_over_http_is_refused() {
+        assert!(!super::sends_keys_to(
+            &"http://[2001:db8::1]".parse().unwrap()
+        ));
+    }
+
+    #[test]
+    fn a_host_that_only_starts_with_localhost_is_refused() {
+        assert!(!super::sends_keys_to(
+            &"http://localhost.evil.com".parse().unwrap()
+        ));
     }
 }
