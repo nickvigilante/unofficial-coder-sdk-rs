@@ -221,7 +221,7 @@ mod tests {
         .await
         .expect("the request timeout must fire before the test ceiling");
         drop(hold_tx);
-        assert!(matches!(result, Err(Error::Transport(_))), "{result:?}");
+        assert!(matches!(result, Err(Error::Timeout(_))), "{result:?}");
     }
 
     #[tokio::test]
