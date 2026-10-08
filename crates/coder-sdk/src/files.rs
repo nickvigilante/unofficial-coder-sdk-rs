@@ -22,16 +22,21 @@ pub(crate) const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 pub struct ChatFileDownload {
     /// The stored media type, from `Content-Type`.
     pub media_type: Option<String>,
-    /// The stored name, from `Content-Disposition`. A person or a model chose it, so it is
-    /// not safe to use as a path.
+    /// The stored name, from `Content-Disposition`: the decoded RFC 5987 `filename*` form when
+    /// present, else `filename`. It is data only. A person or a model chose it, so it may hold
+    /// `/`, `..`, or control characters; callers must sanitize it before using it as a path.
     pub file_name: Option<String>,
-    /// The body's length, from `Content-Length`, when the server sent one.
+    /// The body's length, from `Content-Length`, when the server sent one. It is only a hint:
+    /// a chunked body has none, and a server can send more or fewer bytes than it declared.
+    /// The SDK sets no cap on the body, so a caller that must bound a download counts the
+    /// bytes `chunk` returns and stops reading at its own limit.
     pub size: Option<u64>,
     response: reqwest::Response,
 }
 
 impl ChatFileDownload {
-    /// The next piece of the body, or `None` at its end.
+    /// The next piece of the body, or `None` at its end. A read that outlasts the download's
+    /// timeout fails with an error whose `Error::is_timeout` is true.
     pub async fn chunk(&mut self) -> Result<Option<Vec<u8>>> {
         Ok(self.response.chunk().await?.map(|bytes| bytes.to_vec()))
     }
@@ -46,18 +51,48 @@ fn header(response: &reqwest::Response, name: HeaderName) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// The `filename` parameter of a `Content-Disposition` value, quoted (with `\` escapes, as
-/// Go's `mime.FormatMediaType` writes it) or bare. `None` when it is missing, empty, or cut
-/// off, or when only the extended `filename*` form is present.
-pub(crate) fn disposition_name(value: &str) -> Option<String> {
-    const KEY: &str = "filename=";
-    // Lowercasing changes only ASCII letters, so byte offsets stay the same in `value`.
+/// The start of parameter `key` (such as `filename=`) in a `Content-Disposition` value, at
+/// the beginning or after a `;` or whitespace. Lowercasing changes only ASCII letters, so
+/// byte offsets stay the same in `value`.
+fn param_start(value: &str, key: &str) -> Option<usize> {
     let lower = value.to_ascii_lowercase();
-    let start = lower
-        .match_indices(KEY)
+    lower
+        .match_indices(key)
         .map(|(i, _)| i)
-        .find(|&i| i == 0 || matches!(lower.as_bytes()[i - 1], b';' | b' ' | b'\t'))?;
-    let rest = &value[start + KEY.len()..];
+        .find(|&i| i == 0 || matches!(lower.as_bytes()[i - 1], b';' | b' ' | b'\t'))
+        .map(|i| i + key.len())
+}
+
+/// The `filename*` parameter (RFC 5987, `charset'language'percent-encoded`), decoded. Only
+/// UTF-8 is known. `None` when it is missing, empty, in another charset, or malformed, so
+/// the caller can fall back to the plain `filename`.
+fn extended_name(value: &str) -> Option<String> {
+    let rest = &value[param_start(value, "filename*=")?..];
+    let token = rest.split(';').next().unwrap_or_default().trim();
+    let mut parts = token.splitn(3, '\'');
+    let (charset, _language, encoded) = (parts.next()?, parts.next()?, parts.next()?);
+    if !charset.eq_ignore_ascii_case("utf-8") || encoded.contains(['"', ' ', '\t']) {
+        return None;
+    }
+    let mut bytes = Vec::with_capacity(encoded.len());
+    let mut raw = encoded.bytes();
+    while let Some(b) = raw.next() {
+        if b == b'%' {
+            let hex = [raw.next()?, raw.next()?];
+            let hex = std::str::from_utf8(&hex).ok()?;
+            bytes.push(u8::from_str_radix(hex, 16).ok()?);
+        } else {
+            bytes.push(b);
+        }
+    }
+    let name = String::from_utf8(bytes).ok()?;
+    (!name.is_empty()).then_some(name)
+}
+
+/// The plain `filename` parameter, quoted (with `\` escapes, as Go's
+/// `mime.FormatMediaType` writes it) or bare.
+fn plain_name(value: &str) -> Option<String> {
+    let rest = &value[param_start(value, "filename=")?..];
     let name = match rest.strip_prefix('"') {
         Some(quoted) => {
             let mut name = String::new();
@@ -76,22 +111,37 @@ pub(crate) fn disposition_name(value: &str) -> Option<String> {
     (!name.is_empty()).then_some(name)
 }
 
+/// The file name in a `Content-Disposition` value. The RFC 5987 `filename*` form wins over
+/// `filename` when both are present (RFC 6266); a missing, empty, cut-off, or malformed
+/// value falls through to the next, and then to `None`. It never fails.
+pub(crate) fn disposition_name(value: &str) -> Option<String> {
+    extended_name(value).or_else(|| plain_name(value))
+}
+
 impl Client {
     /// The request `download_chat_file` sends: a `GET` with its own `DOWNLOAD_TIMEOUT`, which
     /// overrides the shared client's total for this request only.
-    fn download_request(&self, file: uuid::Uuid) -> Result<reqwest::Request> {
+    fn download_request(&self, file: uuid::Uuid, timeout: Duration) -> Result<reqwest::Request> {
         let url = self
             .base_url()
             .join(&format!("/api/v2/chats/files/{file}"))
             .map_err(|e| Error::Transport(e.to_string()))?;
-        Ok(self.http().get(url).timeout(DOWNLOAD_TIMEOUT).build()?)
+        Ok(self.http().get(url).timeout(timeout).build()?)
     }
 
     /// Starts downloading chat file `file`. The session token goes only in the request's
     /// header, which the shared client adds. A refusal's text has the token redacted, as every
     /// hand-built request's does, and its body is read only up to a small cap.
     pub async fn download_chat_file(&self, file: uuid::Uuid) -> Result<ChatFileDownload> {
-        let request = self.download_request(file)?;
+        self.download_chat_file_within(file, DOWNLOAD_TIMEOUT).await
+    }
+
+    pub(crate) async fn download_chat_file_within(
+        &self,
+        file: uuid::Uuid,
+        timeout: Duration,
+    ) -> Result<ChatFileDownload> {
+        let request = self.download_request(file, timeout)?;
         let response = self.http().execute(request).await?;
         let status = response.status().as_u16();
         if status != 200 {
@@ -169,6 +219,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_non_ascii_name_round_trips_through_a_download() {
+        let server = MockServer::start().await;
+        let file = uuid::Uuid::new_v4();
+        Mock::given(path(format!("/api/v2/chats/files/{file}")))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes("x").insert_header(
+                "content-disposition",
+                "attachment; filename=\"r_sum_.pdf\"; filename*=UTF-8''r%C3%A9sum%C3%A9.pdf",
+            ))
+            .mount(&server)
+            .await;
+        let download = client(&server.uri())
+            .download_chat_file(file)
+            .await
+            .unwrap();
+        assert_eq!(download.file_name.as_deref(), Some("résumé.pdf"));
+    }
+
+    #[tokio::test]
     async fn a_missing_file_is_a_404_api_error() {
         let server = MockServer::start().await;
         let file = uuid::Uuid::new_v4();
@@ -219,7 +287,7 @@ mod tests {
     #[test]
     fn a_download_has_its_own_five_minute_timeout() {
         let request = client("http://127.0.0.1:1")
-            .download_request(uuid::Uuid::nil())
+            .download_request(uuid::Uuid::nil(), DOWNLOAD_TIMEOUT)
             .unwrap();
         assert_eq!(DOWNLOAD_TIMEOUT, std::time::Duration::from_secs(300));
         assert_eq!(
@@ -239,13 +307,184 @@ mod tests {
             disposition_name("attachment; FILENAME=notes.txt; size=3").as_deref(),
             Some("notes.txt")
         );
-        assert_eq!(
-            disposition_name("attachment; filename*=utf-8''caf%C3%A9.txt"),
-            None,
-            "the extended form is left to the chat's own record"
-        );
         assert_eq!(disposition_name("inline"), None);
         assert_eq!(disposition_name("inline; filename=\"\""), None);
         assert_eq!(disposition_name("inline; filename=\"cut"), None);
+    }
+
+    #[test]
+    fn the_extended_filename_is_decoded_and_preferred() {
+        assert_eq!(
+            disposition_name("attachment; filename*=UTF-8''r%C3%A9sum%C3%A9.pdf").as_deref(),
+            Some("résumé.pdf")
+        );
+        assert_eq!(
+            disposition_name("attachment; filename*=utf-8'en'caf%C3%A9.txt").as_deref(),
+            Some("café.txt"),
+            "the charset is case-insensitive and a language is skipped"
+        );
+        assert_eq!(
+            disposition_name(
+                "attachment; filename=\"resume.pdf\"; filename*=UTF-8''r%C3%A9sum%C3%A9.pdf"
+            )
+            .as_deref(),
+            Some("résumé.pdf"),
+            "filename* wins whatever its position"
+        );
+        assert_eq!(
+            disposition_name(
+                "attachment; filename*=UTF-8''r%C3%A9sum%C3%A9.pdf; filename=\"resume.pdf\""
+            )
+            .as_deref(),
+            Some("résumé.pdf")
+        );
+        assert_eq!(
+            disposition_name("attachment; filename*=UTF-8''a%20b%3Bc.txt").as_deref(),
+            Some("a b;c.txt")
+        );
+    }
+
+    #[test]
+    fn a_malformed_extended_filename_falls_back_to_the_plain_one_then_none() {
+        for bad in [
+            "filename*=UTF-8''%ff%fe.txt",
+            "filename*=UTF-8''bad%2.txt",
+            "filename*=UTF-8''bad%zz.txt",
+            "filename*=UTF-8'no-second-quote",
+            "filename*=KLINGON''abc.txt",
+            "filename*=ISO-8859-1''caf%E9.txt",
+            "filename*=UTF-8''",
+            "filename*=",
+        ] {
+            assert_eq!(
+                disposition_name(&format!("attachment; {bad}; filename=\"plain.txt\"")).as_deref(),
+                Some("plain.txt"),
+                "{bad}"
+            );
+            assert_eq!(
+                disposition_name(&format!("attachment; {bad}")),
+                None,
+                "{bad}"
+            );
+        }
+    }
+
+    /// Serves one response on a fresh local port with `serve` driving the socket after the
+    /// request has been read, for the cases wiremock cannot script: a body that arrives in
+    /// timed pieces, or stalls.
+    async fn raw_server<F, Fut>(serve: F) -> String
+    where
+        F: FnOnce(tokio::net::TcpStream) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = ()> + Send + 'static,
+    {
+        use tokio::io::AsyncReadExt;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut seen = Vec::new();
+            let mut buf = [0u8; 1024];
+            while !seen.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = socket.read(&mut buf).await.unwrap();
+                if n == 0 {
+                    return;
+                }
+                seen.extend_from_slice(&buf[..n]);
+            }
+            serve(socket).await;
+        });
+        url
+    }
+
+    #[tokio::test]
+    async fn a_body_arrives_in_the_pieces_the_server_flushed() {
+        use tokio::io::AsyncWriteExt;
+        let pieces: [&[u8]; 3] = [b"first-piece|", b"second-piece|", b"third-piece"];
+        let url = raw_server(move |mut socket| async move {
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-type: text/plain\r\ntransfer-encoding: chunked\r\n\r\n")
+                .await
+                .unwrap();
+            for piece in pieces {
+                socket
+                    .write_all(format!("{:x}\r\n", piece.len()).as_bytes())
+                    .await
+                    .unwrap();
+                socket.write_all(piece).await.unwrap();
+                socket.write_all(b"\r\n").await.unwrap();
+                socket.flush().await.unwrap();
+                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            }
+            socket.write_all(b"0\r\n\r\n").await.unwrap();
+        })
+        .await;
+        let mut download = client(&url)
+            .download_chat_file(uuid::Uuid::new_v4())
+            .await
+            .unwrap();
+        assert_eq!(download.size, None, "a chunked body has no Content-Length");
+        let mut chunks = Vec::new();
+        while let Some(chunk) = download.chunk().await.unwrap() {
+            chunks.push(chunk);
+        }
+        let expected: Vec<Vec<u8>> = pieces.iter().map(|p| p.to_vec()).collect();
+        assert_eq!(
+            chunks, expected,
+            "buffering the body would return it as one chunk"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_body_read_past_the_timeout_is_a_timeout_error() {
+        use tokio::io::AsyncWriteExt;
+        let url = raw_server(|mut socket| async move {
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 100\r\n\r\npartial")
+                .await
+                .unwrap();
+            socket.flush().await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        })
+        .await;
+        let mut download = client(&url)
+            .download_chat_file_within(uuid::Uuid::new_v4(), std::time::Duration::from_millis(300))
+            .await
+            .unwrap();
+        let err = loop {
+            match download.chunk().await {
+                Ok(Some(_)) => {}
+                Ok(None) => panic!("the body ended instead of timing out"),
+                Err(e) => break e,
+            }
+        };
+        assert!(matches!(err, Error::Timeout(_)), "{err:?}");
+        assert!(err.is_timeout(), "{err:?}");
+        assert!(!format!("{err} {err:?}").contains(TOKEN));
+    }
+
+    #[tokio::test]
+    async fn a_dropped_connection_is_a_transport_error_and_not_a_timeout() {
+        use tokio::io::AsyncWriteExt;
+        let url = raw_server(|mut socket| async move {
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 100\r\n\r\npartial")
+                .await
+                .unwrap();
+            socket.flush().await.unwrap();
+        })
+        .await;
+        let mut download = client(&url)
+            .download_chat_file(uuid::Uuid::new_v4())
+            .await
+            .unwrap();
+        let err = loop {
+            match download.chunk().await {
+                Ok(Some(_)) => {}
+                Ok(None) => panic!("the body ended instead of failing"),
+                Err(e) => break e,
+            }
+        };
+        assert!(matches!(err, Error::Transport(_)), "{err:?}");
+        assert!(!err.is_timeout(), "{err:?}");
     }
 }

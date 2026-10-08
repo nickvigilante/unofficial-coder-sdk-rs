@@ -31,6 +31,8 @@ pub enum Error {
     },
     #[error("transport error: {0}")]
     Transport(String),
+    #[error("request timed out: {0}")]
+    Timeout(String),
     #[error("could not decode response: {0}")]
     Decode(String),
     #[error("not logged in: {0}")]
@@ -45,6 +47,12 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl Error {
+    /// Whether this is `Error::Timeout`: a request or body read that outlasted its time
+    /// limit, as opposed to another transport failure such as a dropped connection.
+    pub fn is_timeout(&self) -> bool {
+        matches!(self, Error::Timeout(_))
+    }
+
     /// Builds an error from an HTTP status and a response body in codersdk.Response shape.
     pub fn from_status(status: u16, body: &[u8]) -> Error {
         if status == 401 {
@@ -94,6 +102,9 @@ impl From<reqwest::Error> for Error {
     fn from(e: reqwest::Error) -> Self {
         if e.status().map(|s| s.as_u16()) == Some(401) {
             return Error::Unauthorized;
+        }
+        if e.is_timeout() {
+            return Error::Timeout(e.to_string());
         }
         Error::Transport(e.to_string())
     }
