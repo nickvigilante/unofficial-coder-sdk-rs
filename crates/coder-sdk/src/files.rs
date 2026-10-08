@@ -32,7 +32,8 @@ pub struct ChatFileDownload {
 }
 
 impl ChatFileDownload {
-    /// The next piece of the body, or `None` at its end.
+    /// The next piece of the body, or `None` at its end. A read that outlasts the download's
+    /// timeout fails with an error whose `Error::is_timeout` is true.
     pub async fn chunk(&mut self) -> Result<Option<Vec<u8>>> {
         Ok(self.response.chunk().await?.map(|bytes| bytes.to_vec()))
     }
@@ -117,19 +118,27 @@ pub(crate) fn disposition_name(value: &str) -> Option<String> {
 impl Client {
     /// The request `download_chat_file` sends: a `GET` with its own `DOWNLOAD_TIMEOUT`, which
     /// overrides the shared client's total for this request only.
-    fn download_request(&self, file: uuid::Uuid) -> Result<reqwest::Request> {
+    fn download_request(&self, file: uuid::Uuid, timeout: Duration) -> Result<reqwest::Request> {
         let url = self
             .base_url()
             .join(&format!("/api/v2/chats/files/{file}"))
             .map_err(|e| Error::Transport(e.to_string()))?;
-        Ok(self.http().get(url).timeout(DOWNLOAD_TIMEOUT).build()?)
+        Ok(self.http().get(url).timeout(timeout).build()?)
     }
 
     /// Starts downloading chat file `file`. The session token goes only in the request's
     /// header, which the shared client adds. A refusal's text has the token redacted, as every
     /// hand-built request's does, and its body is read only up to a small cap.
     pub async fn download_chat_file(&self, file: uuid::Uuid) -> Result<ChatFileDownload> {
-        let request = self.download_request(file)?;
+        self.download_chat_file_within(file, DOWNLOAD_TIMEOUT).await
+    }
+
+    pub(crate) async fn download_chat_file_within(
+        &self,
+        file: uuid::Uuid,
+        timeout: Duration,
+    ) -> Result<ChatFileDownload> {
+        let request = self.download_request(file, timeout)?;
         let response = self.http().execute(request).await?;
         let status = response.status().as_u16();
         if status != 200 {
@@ -275,7 +284,7 @@ mod tests {
     #[test]
     fn a_download_has_its_own_five_minute_timeout() {
         let request = client("http://127.0.0.1:1")
-            .download_request(uuid::Uuid::nil())
+            .download_request(uuid::Uuid::nil(), DOWNLOAD_TIMEOUT)
             .unwrap();
         assert_eq!(DOWNLOAD_TIMEOUT, std::time::Duration::from_secs(300));
         assert_eq!(
@@ -355,5 +364,85 @@ mod tests {
                 "{bad}"
             );
         }
+    }
+
+    /// Serves one response on a fresh local port with `serve` driving the socket after the
+    /// request has been read, for the cases wiremock cannot script: a body that arrives in
+    /// timed pieces, or stalls.
+    async fn raw_server<F, Fut>(serve: F) -> String
+    where
+        F: FnOnce(tokio::net::TcpStream) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = ()> + Send + 'static,
+    {
+        use tokio::io::AsyncReadExt;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut seen = Vec::new();
+            let mut buf = [0u8; 1024];
+            while !seen.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = socket.read(&mut buf).await.unwrap();
+                if n == 0 {
+                    return;
+                }
+                seen.extend_from_slice(&buf[..n]);
+            }
+            serve(socket).await;
+        });
+        url
+    }
+
+    #[tokio::test]
+    async fn a_body_read_past_the_timeout_is_a_timeout_error() {
+        use tokio::io::AsyncWriteExt;
+        let url = raw_server(|mut socket| async move {
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 100\r\n\r\npartial")
+                .await
+                .unwrap();
+            socket.flush().await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        })
+        .await;
+        let mut download = client(&url)
+            .download_chat_file_within(uuid::Uuid::new_v4(), std::time::Duration::from_millis(300))
+            .await
+            .unwrap();
+        let err = loop {
+            match download.chunk().await {
+                Ok(Some(_)) => {}
+                Ok(None) => panic!("the body ended instead of timing out"),
+                Err(e) => break e,
+            }
+        };
+        assert!(err.is_timeout(), "{err:?}");
+        assert!(!format!("{err} {err:?}").contains(TOKEN));
+    }
+
+    #[tokio::test]
+    async fn a_dropped_connection_is_a_transport_error_and_not_a_timeout() {
+        use tokio::io::AsyncWriteExt;
+        let url = raw_server(|mut socket| async move {
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 100\r\n\r\npartial")
+                .await
+                .unwrap();
+            socket.flush().await.unwrap();
+        })
+        .await;
+        let mut download = client(&url)
+            .download_chat_file(uuid::Uuid::new_v4())
+            .await
+            .unwrap();
+        let err = loop {
+            match download.chunk().await {
+                Ok(Some(_)) => {}
+                Ok(None) => panic!("the body ended instead of failing"),
+                Err(e) => break e,
+            }
+        };
+        assert!(matches!(err, Error::Transport(_)), "{err:?}");
+        assert!(!err.is_timeout(), "{err:?}");
     }
 }

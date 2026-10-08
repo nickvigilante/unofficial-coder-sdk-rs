@@ -44,7 +44,19 @@ pub enum Error {
 /// Convenience alias for coder-sdk results.
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Starts the `Error::Transport` message of a timeout, which `Error::is_timeout` looks for.
+/// `Error` has no timeout variant so that adding this stays compatible with callers that
+/// match it exhaustively.
+const TIMEOUT_PREFIX: &str = "timed out: ";
+
 impl Error {
+    /// Whether this is a request or body-read timeout, as opposed to another transport
+    /// failure such as a dropped connection. A timeout is an `Error::Transport`, so existing
+    /// matches on it keep working.
+    pub fn is_timeout(&self) -> bool {
+        matches!(self, Error::Transport(message) if message.starts_with(TIMEOUT_PREFIX))
+    }
+
     /// Builds an error from an HTTP status and a response body in codersdk.Response shape.
     pub fn from_status(status: u16, body: &[u8]) -> Error {
         if status == 401 {
@@ -94,6 +106,9 @@ impl From<reqwest::Error> for Error {
     fn from(e: reqwest::Error) -> Self {
         if e.status().map(|s| s.as_u16()) == Some(401) {
             return Error::Unauthorized;
+        }
+        if e.is_timeout() {
+            return Error::Transport(format!("{TIMEOUT_PREFIX}{e}"));
         }
         Error::Transport(e.to_string())
     }
