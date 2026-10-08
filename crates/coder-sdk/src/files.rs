@@ -26,7 +26,10 @@ pub struct ChatFileDownload {
     /// present, else `filename`. It is data only. A person or a model chose it, so it may hold
     /// `/`, `..`, or control characters; callers must sanitize it before using it as a path.
     pub file_name: Option<String>,
-    /// The body's length, from `Content-Length`, when the server sent one.
+    /// The body's length, from `Content-Length`, when the server sent one. It is only a hint:
+    /// a chunked body has none, and a server can send more or fewer bytes than it declared.
+    /// The SDK sets no cap on the body, so a caller that must bound a download counts the
+    /// bytes `chunk` returns and stops reading at its own limit.
     pub size: Option<u64>,
     response: reqwest::Response,
 }
@@ -391,6 +394,44 @@ mod tests {
             serve(socket).await;
         });
         url
+    }
+
+    #[tokio::test]
+    async fn a_body_arrives_in_the_pieces_the_server_flushed() {
+        use tokio::io::AsyncWriteExt;
+        let pieces: [&[u8]; 3] = [b"first-piece|", b"second-piece|", b"third-piece"];
+        let url = raw_server(move |mut socket| async move {
+            socket
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-type: text/plain\r\ntransfer-encoding: chunked\r\n\r\n")
+                .await
+                .unwrap();
+            for piece in pieces {
+                socket
+                    .write_all(format!("{:x}\r\n", piece.len()).as_bytes())
+                    .await
+                    .unwrap();
+                socket.write_all(piece).await.unwrap();
+                socket.write_all(b"\r\n").await.unwrap();
+                socket.flush().await.unwrap();
+                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            }
+            socket.write_all(b"0\r\n\r\n").await.unwrap();
+        })
+        .await;
+        let mut download = client(&url)
+            .download_chat_file(uuid::Uuid::new_v4())
+            .await
+            .unwrap();
+        assert_eq!(download.size, None, "a chunked body has no Content-Length");
+        let mut chunks = Vec::new();
+        while let Some(chunk) = download.chunk().await.unwrap() {
+            chunks.push(chunk);
+        }
+        let expected: Vec<Vec<u8>> = pieces.iter().map(|p| p.to_vec()).collect();
+        assert_eq!(
+            chunks, expected,
+            "buffering the body would return it as one chunk"
+        );
     }
 
     #[tokio::test]
