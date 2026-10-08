@@ -31,6 +31,8 @@ pub enum Error {
     },
     #[error("transport error: {0}")]
     Transport(String),
+    #[error("request timed out: {0}")]
+    Timeout(String),
     #[error("could not decode response: {0}")]
     Decode(String),
     #[error("not logged in: {0}")]
@@ -44,17 +46,11 @@ pub enum Error {
 /// Convenience alias for coder-sdk results.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Starts the `Error::Transport` message of a timeout, which `Error::is_timeout` looks for.
-/// `Error` has no timeout variant so that adding this stays compatible with callers that
-/// match it exhaustively.
-const TIMEOUT_PREFIX: &str = "timed out: ";
-
 impl Error {
-    /// Whether this is a request or body-read timeout, as opposed to another transport
-    /// failure such as a dropped connection. A timeout is an `Error::Transport`, so existing
-    /// matches on it keep working.
+    /// Whether this is `Error::Timeout`: a request or body read that outlasted its time
+    /// limit, as opposed to another transport failure such as a dropped connection.
     pub fn is_timeout(&self) -> bool {
-        matches!(self, Error::Transport(message) if message.starts_with(TIMEOUT_PREFIX))
+        matches!(self, Error::Timeout(_))
     }
 
     /// Builds an error from an HTTP status and a response body in codersdk.Response shape.
@@ -108,7 +104,7 @@ impl From<reqwest::Error> for Error {
             return Error::Unauthorized;
         }
         if e.is_timeout() {
-            return Error::Transport(format!("{TIMEOUT_PREFIX}{e}"));
+            return Error::Timeout(e.to_string());
         }
         Error::Transport(e.to_string())
     }

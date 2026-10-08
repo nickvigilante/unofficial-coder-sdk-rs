@@ -457,6 +457,7 @@ mod tests {
                 Err(e) => break e,
             }
         };
+        assert!(matches!(err, Error::Timeout(_)), "{err:?}");
         assert!(err.is_timeout(), "{err:?}");
         assert!(!format!("{err} {err:?}").contains(TOKEN));
     }
